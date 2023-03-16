@@ -1,1 +1,2 @@
+- Add to README description of the project (maybe abstract of the paper), figure of workflow, how to cite.
 - Change "Nifty" to "Nifti" (written both ways throughout codes)
