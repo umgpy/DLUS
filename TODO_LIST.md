@@ -1,0 +1,1 @@
+- Change "Nifty" to "Nifti" (written both ways throughout codes)
