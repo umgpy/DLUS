@@ -5,15 +5,18 @@ from glob import glob
 import SimpleITK as sitk
 from dcmrtstruct2nii import dcmrtstruct2nii, list_rt_structs
 
-def check_if_exist(folder_path):
+def check_if_exist(folder_path, create = True):
     """
-    Check if a folder exists, create if not
+    Check if a folder exists, create if not (by default)
     """
     if os.path.exists(folder_path):
         print(folder_path, '.. exists')
     else:
-        os.makedirs(folder_path)
-        print(folder_path, '.. created')
+        if create:
+            os.makedirs(folder_path)
+            print(folder_path, '.. created')
+        else:
+            warnings.warn("%s does NOT exist!!" %folder_path)
 
 def dicom_to_nifty(data_path, out_path):
     
