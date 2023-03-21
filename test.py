@@ -13,23 +13,23 @@ from utils.dm_computation import dm_computation
 from utils.postprocessing import postprocessing_native, export2dicomRT
 
 # Set up paths
-ddbb      = 'UrCTIRMRennesDICOM'
-data_path = '/home/igt/Projects/PerPlanRT/temp_data/'+ddbb
-out_path  = '/home/igt/Projects/PerPlanRT/FrameworkSegmentation_batch/Output/'+ddbb
+ddbb      = 'PRUEBAS'
+data_path = '/home/igt/Projects/PerPlanRT/GITHUB/Input/'+ddbb
+check_if_exist(data_path, create=False) # Check that the path exists
+out_path  = '/home/igt/Projects/PerPlanRT/GITHUB/Output/'+ddbb
 check_if_exist(out_path)
-mode      = 'dicom' # or nifti
+mode      = 'dicom' # 'nifti'
 model     = 'FR_model' #'Mixed_model'
-
-
 
 ###############################################################################################################
 
 start_ini = time.time()
-# 1. Load patient (Dicom or Nifti image)
+# 1. Load patients (DICOM or NIfTI images)
 print("-------------------------------------------------------------------------------------------------------")
-print("1. LOADING PATIENT...")
+print("1. LOADING ORIGINAL IMAGES...")
 print("-------------------------------------------------------------------------------------------------------")
-load_data(data_path, out_path, mode)
+# CT and MR data have to be loaded separately, to indicate if they are in DICOM or NIfTI format
+load_data(data_path, out_path, mode, modality='CT')
 
 # 2. Voi Extraction: Localization Network + Crop using the centroid of the coarse segmentation
 print("-------------------------------------------------------------------------------------------------------")
