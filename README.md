@@ -12,6 +12,8 @@ Data must be structured in the following way:
     output data    [out_path] : 'Output' > ddbb                                                                                                                       
     
   Organization of input data: For each case folder, a sub-folder must be created for each modality. For example, sub-folder 'CT' contains all the DICOM files for the CT of case 0001, whereas sub-folder 'MR' contains all of the DICOM files for the MR of case 0001.
+  
+  
 ![im1](https://user-images.githubusercontent.com/83298381/226656731-c304ab0e-67ea-4be0-a3a4-e6b92797272e.png)
 
   
