@@ -10,17 +10,17 @@ from networks.LocalizationNet.net_3DUnet import unet3d
 from networks.LocalizationNet.utils import get_weighted_sparse_categorical_crossentropy, dice_coefficient
 
 
-def run_voi_extraction(checkpoint_path, out_path, dir_ddbb, modality):
+def run_voi_extraction(checkpoint_path, out_path, dir_ddbb):
     metadata=[]
     for i, path in enumerate(os.listdir(dir_ddbb)):
         if '.ipynb_checkpoints' not in path:
             idx = path.split('_')[1]
             print('\nProcessing case: ', idx)
-            VOI_path = os.path.join(out_path, 'VOIs_'+modality, 'imagesTs', path)
+            VOI_path = os.path.join(out_path, 'VOIs', 'imagesTs', path)
             data_idx = voi_extraction(idx, os.path.join(dir_ddbb, path), VOI_path, checkpoint_path)
             metadata.append(data_idx)
     df_meta = pd.DataFrame(np.array(metadata).squeeze(axis=2), columns=['idx', 'x0','y0','z0', 'res_x0','res_y0','res_z0', 'dim_x0','dim_y0','dim_z0', 'xVOI_res','yVOI_res','zVOI_res', 'res_xVOI_res','res_yVOI_res','res_zVOI_res', 'dim_xVOI_res','dim_yVOI_res','dim_zVOI_res','xoff1', 'xoff2', 'yoff1', 'yoff2', 'zoff1', 'zoff2'])
-    df_meta.to_csv(os.path.join(out_path, 'VOIs_'+modality, 'metadata.csv'))
+    df_meta.to_csv(os.path.join(out_path, 'VOIs', 'metadata.csv'))
     df_meta
     
     
