@@ -113,3 +113,11 @@ def nifti_data(data_path, out_path, modality:str='CT'):
         if not os.path.exists(path_nii):
             os.makedirs(path_nii)
         shutil.copyfile(path_im, file_nii)
+        
+def resample_volume(img_data, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1]):
+    original_spacing = img_data.GetSpacing()
+    original_size = img_data.GetSize()
+    new_size = [int(round(osz*ospc/nspc)) for osz,ospc,nspc in zip(original_size, original_spacing, new_spacing)]
+    return sitk.Resample(img_data, new_size, sitk.Transform(), interpolator,
+                         img_data.GetOrigin(), new_spacing, img_data.GetDirection(), 0,
+                         img_data.GetPixelID())       
