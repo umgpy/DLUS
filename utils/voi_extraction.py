@@ -8,6 +8,7 @@ from skimage.transform import resize
 
 from networks.LocalizationNet.net_3DUnet import unet3d
 from networks.LocalizationNet.utils import get_weighted_sparse_categorical_crossentropy, dice_coefficient
+from .utilities import resample_volume
 
 
 def run_voi_extraction(checkpoint_path, out_path, dir_ddbb):
@@ -105,16 +106,7 @@ def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path):
     data_idx[10:13], data_idx[13:16], data_idx[16:19] = np.array(new_origin)[:,np.newaxis], np.array(VOI_img.GetSpacing())[:,np.newaxis], np.array(VOI_img.GetSize())[:,np.newaxis]
     data_idx[19:25] = np.array([xoff1, xoff2, yoff1, yoff2, zoff1, zoff2])[:,np.newaxis]
     
-    return data_idx
-     
-    
-def resample_volume(img_data, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1]):
-    original_spacing = img_data.GetSpacing()
-    original_size = img_data.GetSize()
-    new_size = [int(round(osz*ospc/nspc)) for osz,ospc,nspc in zip(original_size, original_spacing, new_spacing)]
-    return sitk.Resample(img_data, new_size, sitk.Transform(), interpolator,
-                         img_data.GetOrigin(), new_spacing, img_data.GetDirection(), 0,
-                         img_data.GetPixelID())                             
+    return data_idx                      
                          
 
 def createdatatensor(img, img_x, img_y, img_z, x_cent, y_cent, z_cent):
@@ -141,7 +133,7 @@ def createdatatensor(img, img_x, img_y, img_z, x_cent, y_cent, z_cent):
     return x, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2
 
 
-# REVIEW ######################################################################################################     
+# REVIEW ######################################################################################################        
 
 ##############################################################################
 ##############################################################################
