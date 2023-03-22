@@ -1,4 +1,5 @@
 - Add to README description of the project (maybe abstract of the paper), figure of workflow, how to cite.
+- Prerequirements: add all libraries in PerPlanRT_env + nnUNet
 
 
 TO REVIEW
