@@ -1,20 +1,123 @@
-import SimpleITK as sitk
+import os
 import pandas as pd
 import numpy as np
-from glob import glob
-import shutil
-import os
-
-from LocalizationNet.net_3DUnet import unet3d
+import SimpleITK as sitk
 from tensorflow.keras.optimizers import Adam
-from LocalizationNet.utils import get_weighted_sparse_categorical_crossentropy, dice_coefficient
-
 from skimage.measure import regionprops, label
 from skimage.transform import resize
 
-def createdatatensor(ct_img, img_x, img_y, img_z, x_cent, y_cent, z_cent):
+from networks.LocalizationNet.net_3DUnet import unet3d
+from networks.LocalizationNet.utils import get_weighted_sparse_categorical_crossentropy, dice_coefficient
+
+
+def run_voi_extraction(checkpoint_path, out_path, dir_ddbb, modality):
+    metadata=[]
+    for i, path in enumerate(os.listdir(dir_ddbb)):
+        if '.ipynb_checkpoints' not in path:
+            idx = path.split('_')[1]
+            print('\nProcessing case: ', idx)
+            VOI_path = os.path.join(out_path, 'VOIs_'+modality, 'imagesTs', path)
+            data_idx = voi_extraction(idx, os.path.join(dir_ddbb, path), VOI_path, checkpoint_path)
+            metadata.append(data_idx)
+    df_meta = pd.DataFrame(np.array(metadata).squeeze(axis=2), columns=['idx', 'x0','y0','z0', 'res_x0','res_y0','res_z0', 'dim_x0','dim_y0','dim_z0', 'xVOI_res','yVOI_res','zVOI_res', 'res_xVOI_res','res_yVOI_res','res_zVOI_res', 'dim_xVOI_res','dim_yVOI_res','dim_zVOI_res','xoff1', 'xoff2', 'yoff1', 'yoff2', 'zoff1', 'zoff2'])
+    df_meta.to_csv(os.path.join(out_path, 'VOIs_'+modality, 'metadata.csv'))
+    df_meta
     
+    
+def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path):
+    """
+    Calls the Localization Network (LocalizationNet), a 3DUNet with input size 128x128x128, and loads the pretrained weights. This network creates a VOI of size 224x224x224 from the original image centered on the prostate.
+    Parameters:
+        idx : case id
+        img_path : directory containing all of the images (CT/MR) NIfTI files
+        VOI_path : path to save the VOI in NIfTI format
+        checkpoint_path : path to LocalizationNet weights
+    Returns:
+        data_idx : metadata of VOI extraction
+    """
+
+    # LOAD DATA-----------------------------------------------------------------------------------------------------------------
+    print('Loading scan >> ', img_path)
+    img    = sitk.ReadImage(img_path)
+    origin, resolution = img.GetOrigin(), img.GetSpacing()
+
+    # PREPROCESSING-------------------------------------------------------------------------------------------------------------
+    # Resize images to a size of 128x128x128 voxels to input into LocalizationNet
+    out_size = (128, 128, 128)
+    img_resized = resize(sitk.GetArrayFromImage(img), out_size)[np.newaxis,...]
+    img_resized = np.transpose(img_resized, (0, 2, 3, 1))
+    # Data Normalization: rescaling images to have mean zero and unit variance
+    stats = [-3.417609237173173e-07, 1.9904431281376725e-07]
+    img_resized = (img_resized - stats[0])/stats[1]
+    print('Image resized ', img_resized.shape)
+
+    # COARSE SEGMENTATION PREDICTION--------------------------------------------------------------------------------------------
+    # LocalizationNet parameters
+    model = unet3d((128,128,128,1))
+    model.load_weights(checkpoint_path) # Loads the weights
+    optimizer = Adam(learning_rate=1e-3)
+    model.compile(loss=get_weighted_sparse_categorical_crossentropy(weights=[0.1, 1]), optimizer=optimizer, metrics=['accuracy', dice_coefficient])
+    pred_test = model.predict(img_resized)
+    # Hard segmentation map: we assign the most likely class for each pixel.
+    pred_lab  = np.argmax(pred_test, axis=-1).squeeze()
+    
+    # Resize Coarse Segmentation to the original image size
+    original_size = (img.GetSize()[0], img.GetSize()[1], img.GetSize()[2])
+    pred_lab_resized = np.round(resize(pred_lab, original_size, preserve_range=True))
+    pred_lab_resized = pred_lab_resized.transpose(2,0,1)
+    pred_lab_resized = sitk.GetImageFromArray(pred_lab_resized)
+    pred_lab_resized.CopyInformation(img)
+
+    # Resample the scan, labelmap and Coarse Segmentation a spatial resolution of (1x1x1) mm
+    img_resample       = resample_volume(img, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1])
+    pred_lab_resample = resample_volume(pred_lab_resized, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
+    print('Origin image resample' , img_resample.GetOrigin() , 'Origin pred resample' , pred_lab_resample.GetOrigin())
+    print('Spacing image resample', img_resample.GetSpacing(), 'Spacing pred resample', pred_lab_resample.GetSpacing())
+    print('Size image resample'   , img_resample.GetSize()   , 'Size pred resample'   , pred_lab_resample.GetSize())
+    origin_img_res, resolution_img_res = img_resample.GetOrigin(), img_resample.GetSpacing()
+
+    # Compute the centroid of the largest connected component
+    pred_resample_np = sitk.GetArrayFromImage(pred_lab_resample).transpose(1,2,0)
+    regions, r_area   = regionprops(label(pred_resample_np)), 0
+    for i, reg in enumerate(regions):
+        if reg.area>r_area:
+            r_area = reg.area
+            x_cent, y_cent, z_cent = reg.centroid
+    print('x:', x_cent, 'y:', y_cent, 'z:', z_cent)
+
+    # EXTRACT VOI----------------------------------------------------------------------------------------------------------------
     # Set the centroid of the prostate as the center of the VOI with fixed sizes of (img_x x img_y x img_z) voxels
+    img_x, img_y, img_z = 224, 224, 224 ### DO NOT TOUCH. VOI size required for OAR Segmentation Network
+    VOI_img, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(sitk.GetArrayFromImage(img_resample), img_x, img_y, img_z, x_cent, y_cent, z_cent)
+    VOI_img = sitk.GetImageFromArray(VOI_img)
+    new_origin = (yoff1*(resolution_img_res[0])+origin_img_res[0], xoff1*(resolution_img_res[1])+origin_img_res[1], zoff1*(resolution_img_res[2])+origin_img_res[2])
+    VOI_img.SetOrigin((0,0,0))
+    VOI_img.SetSpacing(img_resample.GetSpacing())
+    VOI_img.SetDirection(img_resample.GetDirection())
+
+    print('Saving... '+ VOI_path)
+    sitk.WriteImage(VOI_img, VOI_path, True)
+
+    # Save meta-data
+    data_idx = np.zeros((25,1))
+    data_idx[0] = str(idx)
+    data_idx[1:4], data_idx[4:7], data_idx[7:10] = np.array(origin)[:,np.newaxis], np.array(resolution)[:,np.newaxis], np.array(original_size)[:,np.newaxis]
+    data_idx[10:13], data_idx[13:16], data_idx[16:19] = np.array(new_origin)[:,np.newaxis], np.array(VOI_img.GetSpacing())[:,np.newaxis], np.array(VOI_img.GetSize())[:,np.newaxis]
+    data_idx[19:25] = np.array([xoff1, xoff2, yoff1, yoff2, zoff1, zoff2])[:,np.newaxis]
+    
+    return data_idx
+     
+    
+def resample_volume(img_data, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1]):
+    original_spacing = img_data.GetSpacing()
+    original_size = img_data.GetSize()
+    new_size = [int(round(osz*ospc/nspc)) for osz,ospc,nspc in zip(original_size, original_spacing, new_spacing)]
+    return sitk.Resample(img_data, new_size, sitk.Transform(), interpolator,
+                         img_data.GetOrigin(), new_spacing, img_data.GetDirection(), 0,
+                         img_data.GetPixelID())                             
+                         
+
+def createdatatensor(img, img_x, img_y, img_z, x_cent, y_cent, z_cent):
     x = np.ndarray((img_x, img_y, img_z), dtype=np.float32)
         
     xoff1 = int(x_cent) - int(img_x/2)
@@ -24,33 +127,21 @@ def createdatatensor(ct_img, img_x, img_y, img_z, x_cent, y_cent, z_cent):
     zoff1 = int(z_cent) - int(img_z/2)
     zoff2 = int(z_cent) + int(img_z/2)
 
-    if xoff2 > ct_img.shape[1]:
-        xoff1, xoff2 = (ct_img.shape[1]-img_x), ct_img.shape[1]
-    if xoff1 < 0:
-        xoff1, xoff2 = 0, img_x
-    if yoff2 > ct_img.shape[2]:
-        yoff1, yoff2 = (ct_img.shape[2]-img_y), ct_img.shape[2]
-    if yoff1 < 0:
-        yoff1, yoff2 = 0, img_y
-    if zoff2 > ct_img.shape[0]:
-        zoff1, zoff2 = (ct_img.shape[0]-img_z), ct_img.shape[0]
-    if zoff1 < 0:
-        zoff1, zoff2 = 0, img_z
+    if xoff2 > img.shape[1]: xoff1, xoff2 = (img.shape[1]-img_x), img.shape[1]
+    if xoff1 < 0: xoff1, xoff2 = 0, img_x
+    if yoff2 > img.shape[2]: yoff1, yoff2 = (img.shape[2]-img_y), img.shape[2]
+    if yoff1 < 0: yoff1, yoff2 = 0, img_y
+    if zoff2 > img.shape[0]: zoff1, zoff2 = (img.shape[0]-img_z), img.shape[0]
+    if zoff1 < 0: zoff1, zoff2 = 0, img_z
         
     print('x_offset',xoff1,':',xoff2, 'y_offset',yoff1,':',yoff2, 'z_offset',zoff1,':',zoff2)
+    print(img.shape)
+    x = img[zoff1:zoff2,xoff1:xoff2,yoff1:yoff2]
     
-    print(ct_img.shape)
-    x = ct_img[zoff1:zoff2,xoff1:xoff2,yoff1:yoff2]
-
     return x, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2
 
-def resample_volume(img_data, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1]):
-    original_spacing = img_data.GetSpacing()
-    original_size = img_data.GetSize()
-    new_size = [int(round(osz*ospc/nspc)) for osz,ospc,nspc in zip(original_size, original_spacing, new_spacing)]
-    return sitk.Resample(img_data, new_size, sitk.Transform(), interpolator,
-                         img_data.GetOrigin(), new_spacing, img_data.GetDirection(), 0,
-                         img_data.GetPixelID())
+
+# REVIEW ######################################################################################################     
 
 ##############################################################################
 ##############################################################################
@@ -138,7 +229,7 @@ def voi_seg_extraction(out_path, urethra3 = False):
                 sitk.WriteImage(VOI_urethra3, out_path+'/GTs/VOIs/urethra3Ts/IGRT_'+idx+'.nii.gz', True) #####
 
             # Save meta-data
-            data_idx[0] = idx
+            data_idx[0] = str(idx)
             data_idx[1:4]  , data_idx[4:7]  , data_idx[7:10]  = np.array(origin_lmap)[:,np.newaxis], np.array(resolution_lmap)[:,np.newaxis], np.array(size_lmap)[:,np.newaxis]
             data_idx[10:13], data_idx[13:16], data_idx[16:19] = np.array(new_origin)[:,np.newaxis], np.array(VOI_labelmap.GetSpacing())[:,np.newaxis], np.array(VOI_labelmap.GetSize())[:,np.newaxis]
             data_idx[19:25] = np.array([xoff1, xoff2, yoff1, yoff2, zoff1, zoff2])[:,np.newaxis]
@@ -224,89 +315,3 @@ def voi_seg_extraction_MRI(out_path):
 
     df_meta = pd.DataFrame(np.array(metadata).squeeze(), columns=['idx', 'x0','y0','z0', 'res_x0','res_y0','res_z0', 'dim_x0','dim_y0','dim_z0', 'xVOI_res','yVOI_res','zVOI_res', 'res_xVOI_res','res_yVOI_res','res_zVOI_res', 'dim_xVOI_res','dim_yVOI_res','dim_zVOI_res','xoff1', 'xoff2', 'yoff1', 'yoff2', 'zoff1', 'zoff2'])
     df_meta.to_csv(out_path + '/metadata_MRI.csv')
-    ##print(df_meta)
-    
-def voi_extraction(idx, data_path, file_img_name, checkpoint_path):
-    
-    # Localization Network
-    model = unet3d((128,128,128,1))
-    model.load_weights(checkpoint_path) # Loads the weights
-    optimizer = Adam(learning_rate=1e-3)
-    model.compile(loss=get_weighted_sparse_categorical_crossentropy(weights=[0.1, 1]), optimizer=optimizer, metrics=['accuracy', dice_coefficient])
-
-    #print("-------------------------------------------------------------------------------------------------------")
-    #print("INITIALIZING VARIABLES")
-    #print("-------------------------------------------------------------------------------------------------------")
-    img_x, img_y, img_z = 224, 224, 224
-
-    # Obtain predictions and compute the centroid in the original image size
-    print('Processing case: ', idx)
-    data_idx = np.zeros((25,1))
-
-    # LOAD DATA-----------------------------------------------------------------------------------------------------------------
-    # CT scan
-    file_ct   = data_path+'/IGRT_'+idx+'_0000.nii.gz'
-    print('Loading CT scan >> ', file_ct)
-    ct_img    = sitk.ReadImage(file_ct)
-    origin_ct, resolution_ct = ct_img.GetOrigin(), ct_img.GetSpacing()
-
-    # PREPROCESSING-------------------------------------------------------------------------------------------------------------
-    # Resize images to a size of 128x128x128 voxels
-    out_size = (128, 128, 128)
-    ct_resized = resize(sitk.GetArrayFromImage(ct_img), out_size)[np.newaxis,...]
-    ct_resized = np.transpose(ct_resized, (0, 2, 3, 1))
-    # Data Normalization: rescaling images to have mean zero and unit variance
-    stats = [-3.417609237173173e-07, 1.9904431281376725e-07]
-    ct_resized = (ct_resized - stats[0])/stats[1]
-    print('Ct resized ',ct_resized.shape)
-
-    # COARSE SEGMENTATION PREDICTION--------------------------------------------------------------------------------------------
-    pred_test = model.predict(ct_resized)
-    # Hard segmentation map: we assign the most likely class for each pixel.
-    pred_lab  = np.argmax(pred_test, axis=-1).squeeze()
-
-    # Resize Coarse Segmentation to the original image size
-    original_size = (ct_img.GetSize()[0], ct_img.GetSize()[1], ct_img.GetSize()[2])
-    pred_lab_resized = np.round(resize(pred_lab, original_size, preserve_range=True))
-    pred_lab_resized = pred_lab_resized.transpose(2,0,1)
-    pred_lab_resized = sitk.GetImageFromArray(pred_lab_resized)
-    pred_lab_resized.CopyInformation(ct_img)
-
-    # Resample the CT scan, labelmap and Coarse Segmentation a spatial resolution of (1x1x1) mm
-    ct_resample       = resample_volume(ct_img, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1])
-    pred_lab_resample = resample_volume(pred_lab_resized, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
-    print('Origin CT resample' , ct_resample.GetOrigin() , 'Origin pred resample' , pred_lab_resample.GetOrigin())
-    print('Spacing CT resample', ct_resample.GetSpacing(), 'Spacing pred resample', pred_lab_resample.GetSpacing())
-    print('Size CT resample'   , ct_resample.GetSize()   , 'Size pred resample'   , pred_lab_resample.GetSize())
-    origin_ct_res, resolution_ct_res = ct_resample.GetOrigin(), ct_resample.GetSpacing()
-
-    # Compute the centroid of the largest connected component
-    pred_resample_np = sitk.GetArrayFromImage(pred_lab_resample).transpose(1,2,0)
-    print(pred_resample_np.shape)
-    regions, r_area   = regionprops(label(pred_resample_np)), 0
-    for i, reg in enumerate(regions):
-        print(reg.centroid)
-        print(reg.area)
-        if reg.area>r_area:
-            r_area = reg.area
-            x_cent, y_cent, z_cent = reg.centroid
-            print('id:', i, 'x:', x_cent, 'y:', y_cent, 'z:', z_cent)
-
-    # EXTRACT VOI----------------------------------------------------------------------------------------------------------------
-    VOI_ct, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(sitk.GetArrayFromImage(ct_resample), img_x, img_y, img_z, x_cent, y_cent, z_cent)
-    VOI_ct = sitk.GetImageFromArray(VOI_ct)
-    new_origin = (yoff1*(resolution_ct_res[0])+origin_ct_res[0], xoff1*(resolution_ct_res[1])+origin_ct_res[1], zoff1*(resolution_ct_res[2])+origin_ct_res[2])
-    VOI_ct.SetOrigin((0,0,0))
-    VOI_ct.SetSpacing(ct_resample.GetSpacing())
-    VOI_ct.SetDirection(ct_resample.GetDirection())
-
-    print('Saving... '+ file_img_name)
-    sitk.WriteImage(VOI_ct, file_img_name, True)
-
-    # Save meta-data
-    data_idx[0] = idx
-    data_idx[1:4], data_idx[4:7], data_idx[7:10] = np.array(origin_ct)[:,np.newaxis], np.array(resolution_ct)[:,np.newaxis], np.array(original_size)[:,np.newaxis]
-    data_idx[10:13], data_idx[13:16], data_idx[16:19] = np.array(new_origin)[:,np.newaxis], np.array(VOI_ct.GetSpacing())[:,np.newaxis], np.array(VOI_ct.GetSize())[:,np.newaxis]
-    data_idx[19:25] = np.array([xoff1, xoff2, yoff1, yoff2, zoff1, zoff2])[:,np.newaxis]
-    
-    return data_idx
