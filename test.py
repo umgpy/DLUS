@@ -8,19 +8,19 @@ import pandas as pd
 import time
 
 from utils.utilities import load_data, check_if_exist
-from utils.voi_extraction import voi_extraction
+from utils.voi_extraction import run_voi_extraction
 from utils.dm_computation import dm_computation
 from utils.postprocessing import postprocessing_native, export2dicomRT
 
 # Set up paths
 ddbb      = 'PRUEBAS'
-data_path = '/home/igt/Projects/PerPlanRT/GITHUB/Input/'+ddbb
-check_if_exist(data_path, create=False) # Check that the path exists
-out_path  = '/home/igt/Projects/PerPlanRT/GITHUB/Output/'+ddbb
-check_if_exist(out_path)
 mode      = 'dicom' #'nifti'
-modality  = 'CT' #'MR'
+modality  = 'CT'
 model     = 'FR_model' #'Mixed_model'
+data_path = os.getcwd()+'/Input/'+ddbb
+check_if_exist(data_path, create=False) # Check that the path exists
+out_path  = os.path.join(os.getcwd(), 'Output', ddbb, modality)
+check_if_exist(out_path)
 
 ###############################################################################################################
 
@@ -38,9 +38,9 @@ print("2. VOI EXTRACTION...")
 print("-------------------------------------------------------------------------------------------------------")
 checkpoint_path = os.getcwd()+'/networks/LocalizationNet/LocalizationNet_weights.best.hdf5'
 dir_ddbb     = os.path.join(out_path, modality+'s')
-check_if_exist(os.path.join(out_path, 'VOIs_'+modality, 'imagesTs')) # Path to save generated VOIs
+check_if_exist(os.path.join(out_path, 'VOIs', 'imagesTs')) # Path to save generated VOIs
 
-p = multiprocessing.Process(target=run_voi_extraction, args=(checkpoint_path, out_path, dir_ddbb, modality))
+p = multiprocessing.Process(target=run_voi_extraction, args=(checkpoint_path, out_path, dir_ddbb))
 p.start()
 p.join()
 
