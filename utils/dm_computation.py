@@ -1,10 +1,6 @@
-import SimpleITK as sitk
-import pandas as pd
-import numpy as np
-import shutil
 import os
+import SimpleITK as sitk
 import time
-import itk
 
 # Filters
 exp                = sitk.ExpImageFilter()                         # Exponential Filter
@@ -12,11 +8,22 @@ MinMax_filter      = sitk.MinimumMaximumImageFilter()              # Minimun Max
 SignedDanielssonDM = sitk.SignedDanielssonDistanceMapImageFilter() # DanielssonDistance Filter
 SignedDanielssonDM.SetUseImageSpacing(True)
 
-def dm_computation(out_OARs, out_path, i, file=False):
+def dm_computation(dir_ddbb, out_path, model):
     
-    obtain_dm_img(out_OARs, out_path, i)
+    for i, path in enumerate(os.listdir(dir_ddbb)):
+        if '.ipynb_checkpoints' not in path:
+            idx = path.split('_')[1]
+            print('\nProcessing case: ', idx)
+            dmap_path = os.path.join(out_path, 'DistanceMaps', 'imagesTs', path)
+            
+            if os.path.exists(dmap_path):
+                continue
+                
+            file_OARs = os.path.join(out_path, 'OARs', model, path.split('_')[0]+'_'+idx+'.nii.gz')
+            out_OARs  = sitk.ReadImage(file_OARs)
+            obtain_dm_img(out_OARs, dmap_path)
 
-def obtain_dm_img(out_OARs, file_dm_final, i):
+def obtain_dm_img(out_OARs, file_dm_final):
     
     # Segmentation
     # Label Map -> Each voxel is associated to a specific structure:
@@ -25,6 +32,7 @@ def obtain_dm_img(out_OARs, file_dm_final, i):
     #    - 2: Bladder
     #    - 3: Prostate
     #    - 4: Seminal vesicles
+    
     # Prostate--------------------------------------------------------------------------------------------------------------
     prostate = (out_OARs==3)
     # Bladder---------------------------------------------------------------------------------------------------------------
@@ -65,9 +73,3 @@ def obtain_dm_img(out_OARs, file_dm_final, i):
     
     sitk.WriteImage(dm_final, file_dm_final, True)
     print('Saving... '+ file_dm_final)
-    
-    
-
-    
-    
-  
