@@ -92,19 +92,9 @@ for i, file_OARs in enumerate(sorted(glob(dir_ddbb_OARs + r'/*.nii.gz'))):
 print("-------------------------------------------------------------------------------------------------------")
 print("4. DISTANCE MAP COMPUTATION...")
 print("-------------------------------------------------------------------------------------------------------")
-dir_ddbb_ct = out_path+'/CTs'
-check_if_exist(out_path+'/DistanceMaps/imagesTs_2')
-# Bladder Prostate Segmentation and DM Computation
-for i, path in enumerate(os.listdir(dir_ddbb_ct)):
-    idx = path.split('_')[1]
-    # Check if image already loaded
-    file_img_name = out_path+'/DistanceMaps/imagesTs_2/MABUS_'+idx+'_0000.nii.gz'
-    if os.path.exists(file_img_name):
-        continue
-    print('Processing case: ', idx)
-    file_OARs = out_path+'/OARs/'+model+'/IGRT_'+idx+'.nii.gz'
-    out_OARs  = sitk.ReadImage(file_OARs)
-    dm_computation(out_OARs, file_img_name, idx, False)
+check_if_exist(os.path.join(out_path, 'DistanceMaps', 'imagesTs'))
+# Bladder & Prostate Segmentation and DM Computation
+dm_computation(dir_ddbb, out_path, model)
     
 # 5. URETHRA SEGMENTATION
 print("-------------------------------------------------------------------------------------------------------")
