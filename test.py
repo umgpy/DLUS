@@ -98,27 +98,30 @@ dm_computation(dir_ddbb, out_path, model)
     
 # 5. URETHRA SEGMENTATION
 print("-------------------------------------------------------------------------------------------------------")
-print("5. URETHRA SEGMENTATION (OUTPUT 2)...")
+print("5. URETHRA SEGMENTATION")
 print("-------------------------------------------------------------------------------------------------------")
 
-path_imgs2    = out_path+'/DistanceMaps/imagesTs_2'
-path_results2 = out_path+'/Urethra/Urethra_DL_2'
+path_dm = os.path.join(out_path, 'DistanceMaps', 'imagesTs')
+dir_ddbb_uretra = os.path.join(out_path, 'Urethra', 'DLUS')
 
-!nnUNet_predict -i {path_imgs2} -o {path_results2} -t 108 -tr nnUNetTrainerV2 -ctr nnUNetTrainerV2CascadeFullRes -m 3d_fullres -p nnUNetPlansv2.1 --disable_tta
+!nnUNet_predict -i {path_dm} -o {dir_ddbb_uretra} -t 108 -tr nnUNetTrainerV2 -ctr nnUNetTrainerV2CascadeFullRes -m 3d_fullres -p nnUNetPlansv2.1 --disable_tta
 
-dir_ddbb_uretra = out_path+'/Urethra/Urethra_DL_2'
 for i, file_out_urethra in enumerate(sorted(glob(dir_ddbb_uretra + r'/*.nii.gz'))):
-    idx = file_out_urethra.split('/')[-1].split('_')[-1][:-7]
-    file_urethra = dir_ddbb_uretra+'/MABUS_'+idx+'.nii.gz'
-    print(file_urethra)
-    out_urethra = sitk.ReadImage(file_urethra)
+    idx = file_out_urethra.split('/')[-1].split('_')[-1].split('.')[0]
+    print(file_out_urethra)
+    out_urethra = sitk.ReadImage(file_out_urethra)
+    
     # 5.1 Post-processing to Native space
     print("5.1 URETHRA SEGMENTATION POST-PROCESSING TO NATIVE SPACE ----------------------------------------------")
-    postprocessing_native(out_urethra, out_path, str(idx),'urethra_DL_2', None, False)
+    postprocessing_native(out_urethra, out_path, str(idx),'urethra', ddbb, modality)
+    
     # 5.2 Exportation to Dicom-RT
     print("5.2 URETHRA SEGMENTATION EXPORTATION TO DICOM-RT ------------------------------------------------------")
-    ct_file  = out_path+'/Native/ID_'+str(idx)+'/ID_'+str(idx)+'_voi.nii.gz'
-    seg_file = out_path+'/Native/ID_'+str(idx)+'/ID_'+str(idx)+'_urethra.nii.gz'
-    export2dicomRT(ct_file, seg_file, out_path+'/Native/DICOM/ID_'+str(idx), 'urethra')
+    img_file  = os.path.join(out_path, 'Native', str(idx), ddbb+'_'+str(idx)+'_VOI.nii.gz')
+    seg_file = os.path.join(out_path, 'Native', str(idx), ddbb+'_'+str(idx)+'_urethra.nii.gz')
+    save_path = os.path.join(out_path, 'Native', 'DICOM', str(idx))
+    # For the moment, we can only translate CTs and their segmentations to DICOM; not MR images
+    if modality=='CT':
+        export2dicomRT(img_file, seg_file, save_path, 'urethra_DLUS', modality)
 
 print("--- Total Execution Time: %s seconds ---" % (time.time() - start_ini))
