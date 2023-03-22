@@ -18,7 +18,8 @@ data_path = '/home/igt/Projects/PerPlanRT/GITHUB/Input/'+ddbb
 check_if_exist(data_path, create=False) # Check that the path exists
 out_path  = '/home/igt/Projects/PerPlanRT/GITHUB/Output/'+ddbb
 check_if_exist(out_path)
-mode      = 'dicom' # 'nifti'
+mode      = 'dicom' #'nifti'
+modality  = 'CT' #'MR'
 model     = 'FR_model' #'Mixed_model'
 
 ###############################################################################################################
@@ -29,29 +30,17 @@ print("-------------------------------------------------------------------------
 print("1. LOADING ORIGINAL IMAGES...")
 print("-------------------------------------------------------------------------------------------------------")
 # CT and MR data have to be loaded separately, to indicate if they are in DICOM or NIfTI format
-load_data(data_path, out_path, mode, modality='CT')
+load_data(data_path, out_path, mode, modality=modality)
 
-# 2. Voi Extraction: Localization Network + Crop using the centroid of the coarse segmentation
+# 2. VOI Extraction: Localization Network + Crop using the centroid of the coarse segmentation
 print("-------------------------------------------------------------------------------------------------------")
 print("2. VOI EXTRACTION...")
 print("-------------------------------------------------------------------------------------------------------")
-checkpoint_path = os.getcwd()+'/LocalizationNet/pretrain_model_weights.best.hdf5'
-dir_ddbb_ct     = out_path+'/CTs'
-check_if_exist(out_path+'/VOIs/imagesTs')
+checkpoint_path = os.getcwd()+'/networks/LocalizationNet/LocalizationNet_weights.best.hdf5'
+dir_ddbb     = os.path.join(out_path, modality+'s')
+check_if_exist(os.path.join(out_path, 'VOIs_'+modality, 'imagesTs')) # Path to save generated VOIs
 
-def run_voi_extraction(checkpoint_path, dir_ddbb_ct):
-    metadata=[]
-    for i, path in enumerate(os.listdir(dir_ddbb_ct)):
-        idx = path.split('_')[1]
-        # Check if image already loaded
-        file_img_name = out_path+'/VOIs/imagesTs/IGRT_'+idx+'_0000.nii.gz'
-        data_idx = voi_extraction(idx, dir_ddbb_ct, file_img_name, checkpoint_path)
-        metadata.append(data_idx)
-    df_meta = pd.DataFrame(np.array(metadata).squeeze(), columns=['idx', 'x0','y0','z0', 'res_x0','res_y0','res_z0', 'dim_x0','dim_y0','dim_z0', 'xVOI_res','yVOI_res','zVOI_res', 'res_xVOI_res','res_yVOI_res','res_zVOI_res', 'dim_xVOI_res','dim_yVOI_res','dim_zVOI_res','xoff1', 'xoff2', 'yoff1', 'yoff2', 'zoff1', 'zoff2'])
-    df_meta.to_csv(out_path + '/metadata.csv')
-    df_meta
-
-p = multiprocessing.Process(target=run_voi_extraction, args=(checkpoint_path,dir_ddbb_ct,))
+p = multiprocessing.Process(target=run_voi_extraction, args=(checkpoint_path, out_path, dir_ddbb, modality))
 p.start()
 p.join()
 
