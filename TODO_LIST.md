@@ -1,6 +1,6 @@
 - Add to README description of the project (maybe abstract of the paper), figure of workflow, how to cite.
 - Prerequirements: add all libraries in PerPlanRT_env + nnUNet
-- For the moment, manual segs used only from DICOM --> include from NIfTI
+- For the moment, manual segs used only from DICOM --> include from NIfTI + allow to use some manual segs and other automatic
 - img to DICOM only possible with CT --> extend to MR
 
 
