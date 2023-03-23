@@ -1,6 +1,8 @@
 # DLUS
 GitHub repository for DLUS: Deep Learning-based Segmentation of Prostatic Urethra on Computed Tomography Scans for Treatment Planning
 
+STILL IN CONSTRUCTION ................................................................................................................
+
 ![Figure1](https://user-images.githubusercontent.com/83298381/226644663-d59dfd54-1c1d-40e8-9a87-089862e4a396.png)
 
 
