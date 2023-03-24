@@ -8,13 +8,16 @@ MinMax_filter      = sitk.MinimumMaximumImageFilter()              # Minimun Max
 SignedDanielssonDM = sitk.SignedDanielssonDistanceMapImageFilter() # DanielssonDistance Filter
 SignedDanielssonDM.SetUseImageSpacing(True)
 
-def dm_computation(dir_ddbb, out_path, model):
+def dm_computation(dir_ddbb, out_path, model, use_manual_OARs=False):
     
     for i, path in enumerate(os.listdir(dir_ddbb)):
         if '.ipynb_checkpoints' not in path:
             idx = path.split('_')[1]
             print('\nProcessing case: ', idx)
-            dmap_path = os.path.join(out_path, 'DistanceMaps', 'imagesTs', path)
+            if use_manual_OARs:
+                dmap_path = os.path.join(out_path, 'mDistanceMaps', 'imagesTs', path)
+            else:
+                dmap_path = os.path.join(out_path, 'DistanceMaps', 'imagesTs', path)
             
             if os.path.exists(dmap_path):
                 continue
