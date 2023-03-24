@@ -56,7 +56,7 @@ def load_seg_data(data_path, out_path):
             # Possible names for OARs structures (add new names if necessary)
             rectum_names   = ['Rectum', 'rectum', 'Retto', 'retto', 'paroirectale', 'RECTUM', 'paroi rectale']            # Rectum
             bladder_names  = ['Bladder', 'bladder', 'Vescica', 'vescica', 'Vessie', 'vessie', 'paroivesicale', 'VESSIE', 'vesssie']  # Bladder
-            prostate_names = ['Prostate', 'prostate', 'prosate', 'proistate', 'prosatet', 'Prostate _CTV','CTV Prostate', 'prosatte', 'Prostate-CTV', 'prost', 'prosta', 'CTV prostate'] #'ctv','ctv1' # Prostate
+            prostate_names = ['Prostate', 'prostate', 'prosate', 'proistate', 'prosatet', 'prosatte', 'prost', 'prosta'] #'ctv','ctv1' # Prostate
             ##SV_names       = ['SV', 'sv' , 'SeminalVesicles', 'seminal_vesicles', 'vseminales']                         # Seminal Vesicles
             # Convert dicom-RTSTRUCT files to nifti
             rectumName   = list(set(list_rt_structs(file_seg)) & set(rectum_names))[0]
