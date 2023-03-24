@@ -3,8 +3,11 @@ GitHub repository for DLUS: Deep Learning-based Segmentation of Prostatic Urethr
 
 STILL IN CONSTRUCTION ................................................................................................................
 
-![Figure1](https://user-images.githubusercontent.com/83298381/226644663-d59dfd54-1c1d-40e8-9a87-089862e4a396.png)
+Full paper available at: https://www.sciencedirect.com/science/article/pii/S2405631623000222
+Please cite as :
+Cubero, L., García-Elcano, L, Mylona, E., Boue-Rafle, A., Cozzarini, C., Ubeira Gabellini, M.G. et al. "Deep learning-based segmentation of prostatic urethra on computed tomography scans for treatment planning." Phys Imaging Radiat Oncol (2023), https://doi.org/10.1016/j.phro.2023.100431.
 
+![Figure1](https://user-images.githubusercontent.com/83298381/226644663-d59dfd54-1c1d-40e8-9a87-089862e4a396.png)
 
 
 1. LOADING ORIGINAL IMAGES...                                                                                                                                         
