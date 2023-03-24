@@ -1,7 +1,9 @@
 import os
 import shutil
+import numpy as np
 import SimpleITK as sitk
 import warnings
+from dcmrtstruct2nii import dcmrtstruct2nii, list_rt_structs
 
 def check_if_exist(folder_path, create = True):
     """
@@ -49,7 +51,9 @@ def get_image(patient_fold, data_path, out_path, modality:str='CT'):
         print('----- MR Image -----')
         path_im = os.path.join(data_path, patient_fold, 'MR')
     
-    return path_im, path_nii, file_nii
+    path_segs = os.path.join(data_path, patient_fold, modality+'_mOAR')
+    
+    return path_im, path_nii, file_nii, path_segs
 
 def dicom_to_nifti(data_path, out_path, modality:str='CT'):
     """
@@ -62,11 +66,8 @@ def dicom_to_nifti(data_path, out_path, modality:str='CT'):
             print('Avoiding the file: ', patient_fold)
         
         print('\nProcessing case: ', patient_fold)
-        path_im, path_nii, file_nii = get_image(patient_fold, data_path, out_path, modality)
-        #Check if image already loaded
-        if os.path.exists(file_nii):
-            print(file_nii, '     already loaded')
-            continue
+        path_im, path_nii, file_nii, path_segs = get_image(patient_fold, data_path, out_path, modality)        
+        
         print(path_im)
         reader = sitk.ImageSeriesReader()
         dicomReader = reader.GetGDCMSeriesFileNames(path_im)
@@ -83,6 +84,51 @@ def dicom_to_nifti(data_path, out_path, modality:str='CT'):
         if not os.path.exists(path_nii):
             os.makedirs(path_nii)
         sitk.WriteImage(image, file_nii, True)
+        
+        # Segmentation ###############################
+        if os.path.exists(path_segs):
+            print('----- Segmentation -----')    
+            path_segs = get_directory_paths(path_segs)
+            path_seg = path_segs[0]
+            print(list_rt_structs(path_seg))
+            
+            # Possible names for OARs structures (add new names if necessary)
+            rectum_names   = ['Rectum', 'rectum', 'Retto', 'retto', 'paroirectale', 'RECTUM', 'paroi rectale']            # Rectum
+            bladder_names  = ['Bladder', 'bladder', 'Vescica', 'vescica', 'Vessie', 'vessie', 'paroivesicale', 'VESSIE', 'vesssie']  # Bladder
+            prostate_names = ['Prostate', 'prostate', 'prosate', 'proistate', 'prosatet', 'prosatte',  'prost', 'prosta']   # Prostate
+            SV_names       = ['SV', 'sv' , 'SeminalVesicles', 'seminal_vesicles', 'vseminales']                         # Seminal Vesicles
+            # Convert dicom-RTSTRUCT files to nifti
+            rectumName   = list(set(list_rt_structs(path_seg)) & set(rectum_names))[0]
+            bladderName  = list(set(list_rt_structs(path_seg)) & set(bladder_names))[0]
+            prostateName = list(set(list_rt_structs(path_seg)) & set(prostate_names))[0]
+            OARstructs_list = [rectumName, bladderName, prostateName] # List of structures to convert
+            try:
+                svName       = list(set(list_rt_structs(path_seg)) & set(SV_names))[0]
+                OARstructs_list.append(svName)
+            except:
+                print('No seminal vesicles in manual OARs segmentations')
+            print(OARstructs_list)
+
+            # Save as NIfTI
+            path_file_nii = os.path.join(out_path, 'GTs', patient_fold)
+            if not os.path.exists(path_file_nii):
+                os.makedirs(path_file_nii)
+            dcmrtstruct2nii(path_seg, path_im, path_file_nii, structures=OARstructs_list)
+            
+            for i, OAR in enumerate(OARstructs_list):
+                file_img   = path_file_nii + '/mask_'+OAR+'.nii.gz'
+                seg   = sitk.ReadImage(file_img)
+                segg   = sitk.GetArrayFromImage((seg==255))
+                if i==0: labelMap_np = sitk.GetArrayFromImage(seg)
+                labelMap_np[tuple([segg==1])]   = i+1
+            
+            labelMap = sitk.GetImageFromArray(labelMap_np)
+            labelMap.CopyInformation(sitk.ReadImage(path_file_nii + '/image.nii.gz'))
+            print('Labels: ', np.unique(labelMap_np))
+            file_seg_name = path_file_nii+'/labelMap.nii.gz'
+            print('Saving... '+ file_seg_name)
+            sitk.WriteImage(labelMap, file_seg_name, True)
+                
         
 def nifti_data(data_path, out_path, modality:str='CT'):
     """
@@ -120,4 +166,4 @@ def resample_volume(img_data, interpolator = sitk.sitkLinear, new_spacing = [1, 
     new_size = [int(round(osz*ospc/nspc)) for osz,ospc,nspc in zip(original_size, original_spacing, new_spacing)]
     return sitk.Resample(img_data, new_size, sitk.Transform(), interpolator,
                          img_data.GetOrigin(), new_spacing, img_data.GetDirection(), 0,
-                         img_data.GetPixelID())       
+                         img_data.GetPixelID())          
