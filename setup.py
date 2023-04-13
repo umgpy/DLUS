@@ -1,4 +1,7 @@
+from setuptools import setup, find_namespace_packages
+
 setup(name='DLUS',
+      packages=find_namespace_packages(include=["DLUS"]),
       description='DLUS: Deep Learning-based Segmentation of Prostatic Urethra on Computed Tomography Scans for Treatment Planning',
       url='https://github.com/BSEL-UC3M/DLUS',
       author='IGT - BSEL-UC3M',
