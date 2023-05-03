@@ -25,6 +25,8 @@ Data must be structured in the following way:
     output data    [out_path] : 'Output' > ddbb                                                                                                                       
     
     Organization of input data: The ddbb folder should contain a different folder for each case to process. In each case folder, the image scan should be saved in a sub-folder named "img", and the manual OAR segmentations - if available - in a sub-folder named "mOARs".
+    
+    To load the mOARs in DICOM format, we have included a series of typical names used in the clinic to describe the rectum, bladder, prostate and seminal vesicles. These names can be found in utils.utilities.dicom_to_nifti(), and can be updated to include other terminologies by adding them to the available lists.
   
 
   
