@@ -8,7 +8,7 @@ from rt_utils import RTStructBuilder
 from .utilities import check_if_exist, resample_volume
 
                   
-def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str, modality:str='CT'):
+def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str):
     """
     Function to translate the predicted volume or OARs back to the native space.
     Parameters:
@@ -17,7 +17,6 @@ def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str, modality:
         idx : case id (0001)
         vol : type of volume to translate --> 'OARs', 'VOI'
         ddbb : name of the database
-        modality : image modality --> 'CT', 'MR', [default: 'CT']
     """
     print('\n')
     # Check if volume already translated into native space
@@ -25,7 +24,7 @@ def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str, modality:
     check_if_exist(out_path_native)
     file_vol_name = os.path.join(out_path_native, ddbb+'_'+idx+'_'+vol+'.nii.gz')
     if os.path.exists(file_vol_name):
-        print('nOutput in the native space for case ' + idx + ' already exists')
+        print('Output in the native space for case ' + idx + ' already exists')
         
     else:
         print('Obtaining output in the native space...')
@@ -50,10 +49,7 @@ def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str, modality:
         #----------------------------------------------------------------------------------------------------------------------#
         # Image Scan Original
         #----------------------------------------------------------------------------------------------------------------------#
-        if modality=='CT':
-            file = os.path.join(out_path, modality+'s', ddbb+'_'+idx+'_0000.nii.gz')
-        elif modality=='MR':
-            file = os.path.join(out_path, modality+'s', ddbb+'_'+idx+'_0001.nii.gz')
+        file = os.path.join(out_path, 'imgs', ddbb+'_'+idx+'_0000.nii.gz')
         or_img  = sitk.ReadImage(file)
 
         #----------------------------------------------------------------------------------------------------------------------#
@@ -76,7 +72,7 @@ def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str, modality:
         sitk.WriteImage(res_pred_img, file_vol_name, True)
 
         
-def export2dicomRT(file_img, file_seg, out_path, seg, modality:str='CT'):
+def export2dicomRT(file_img, file_seg, out_path, seg):
     """
     Function to convert the image scan (CT/MR) and its segmentations (OARs/urethra) to DICOM format.
     Parameters:
@@ -88,10 +84,9 @@ def export2dicomRT(file_img, file_seg, out_path, seg, modality:str='CT'):
     #----------------------------------------------------------------------------------------------------------------------#
     # Image Scan
     #----------------------------------------------------------------------------------------------------------------------#    
-    out_path_img = os.path.join(out_path, modality)
-    if not os.path.exists(out_path_img):
-        os.makedirs(out_path_img)
-        ct_to_dicom(file_img, out_path_img)
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+        ct_to_dicom(file_img, out_path)
 
     #----------------------------------------------------------------------------------------------------------------------#
     # Segmentation - either OARs or urethra segmentation
@@ -109,7 +104,7 @@ def export2dicomRT(file_img, file_seg, out_path, seg, modality:str='CT'):
 
         # NIfTI to DICOM
         # Create new RT Struct. Requires the DICOM series path for the RT Struct.
-        rtstruct = RTStructBuilder.create_new(dicom_series_path=out_path_img)
+        rtstruct = RTStructBuilder.create_new(dicom_series_path=out_path)
         # Add the 3D mask (Numpy array of type bool) as an ROI.
         # Setting the color, description, and name
         rtstruct.add_roi(mask=rectum,   color=[128, 174, 128], name="Rectum")
@@ -124,7 +119,7 @@ def export2dicomRT(file_img, file_seg, out_path, seg, modality:str='CT'):
 
         # NIfTI to DICOM
         # Create new RT Struct. Requires the DICOM series path for the RT Struct.
-        rtstruct = RTStructBuilder.create_new(dicom_series_path=out_path_img)
+        rtstruct = RTStructBuilder.create_new(dicom_series_path=out_path)
         # Add the 3D mask (Numpy array of type bool) as an ROI.
         # Setting the color, description, and name
         rtstruct.add_roi(mask=urethra,   color=[255, 0, 0], name="Urethra")
