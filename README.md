@@ -45,3 +45,19 @@ A trained nnU-Net is called to predict the segmentations of the bladder, rectum,
     The VOI and predicted segmentations in the native space will be saved in 'Output' > ddbb > 'Native'
     
     The VOI and predicted segmentations in DICOM will be saved in 'Output' > ddbb > 'DICOM'
+
+4. DISTANCE MAP COMPUTATION                                                                                                                                    
+The bladder and prostate OARs segmentations are used to calculate the distance maps, which are then used to guide the urethra segmentation.
+
+    The computed distance maps are saved in 'Output' > ddbb > 'DistanceMaps'
+    
+5. URETHRA SEGMENTATION                                                                                                                                        
+A trained nnU-Net is called to predict the segmentation of the urethra based on the previously computed distance maps. 
+
+    The predicted segmentations will be saved in 'Output' > ddbb > 'Urethra' > 'DLUS'
+    
+    Then, a post-processing step allows to bring the OAR segmentations back to native space and to export them to DICOM format. 
+    
+    The VOI and predicted segmentations in the native space will be saved in 'Output' > ddbb > 'Native'
+    
+    The VOI and predicted segmentations in DICOM will be saved in 'Output' > ddbb > 'DICOM'
