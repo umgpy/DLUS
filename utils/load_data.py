@@ -29,7 +29,7 @@ def get_image(patient_fold, data_path, out_path):
         file_nii : path of output image in NIfTI format
     """
     ddbb_id = data_path.split('/')[-1]
-    path_nii = os.path.join(out_path, 'img')
+    path_nii = os.path.join(out_path, 'imgs')
     file_nii = os.path.join(path_nii, ddbb_id+'_'+patient_fold+'_0000.nii.gz')
     print('----- Image -----')
     path_im = os.path.join(data_path, patient_fold, 'img')
