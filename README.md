@@ -27,6 +27,21 @@ Data must be structured in the following way:
     Organization of input data: The ddbb folder should contain a different folder for each case to process. In each case folder, the image scan should be saved in a sub-folder named "img", and the manual OAR segmentations - if available - in a sub-folder named "mOAR".
     
     To load the mOARs in DICOM format, we have included a series of typical names used in the clinic to describe the rectum, bladder, prostate and seminal vesicles. These names can be found in utils.utilities.dicom_to_nifti(), and can be updated to include other terminologies by adding them to the available lists.
+    
+    The loaded images will be saved in 'Output' > ddbb > 'imgs'
 
 2. VOI EXTRACTION                                                                                                                                                 
 Localization Network + Crop using the centroid of the coarse prosate segmentation. Check the result to ensure that appropriate VOI has been created. Sometimes some images are not well predicted and it's necessary to modify this VOI manually to ensure that the OARs and urethra segmentations are accurate.
+
+    The cropped VOIs will be saved in 'Output' > ddbb > 'VOIs' > 'imagesTs'
+
+3. OARs SEGMENTATION : Fine Segmentation Network                                                                                                                      
+A trained nnU-Net is called to predict the segmentations of the bladder, rectum, prostate and seminal vesicles. Depending of the model selected (FR_model or Mixed_model), the network called for inference differs. The main distinction between both networks is the protocol to segment the rectum, based on French delineations with FR_model, or trained with joined data from a French and two Italian medical institutions with Mixed_model.
+
+    The predicted segmentations will be saved in 'Output' > ddbb > 'OARs' > model
+    
+    Then, a post-processing step allows to bring the OAR segmentations back to native space and to export them to DICOM format. 
+    
+    The VOI and predicted segmentations in the native space will be saved in 'Output' > ddbb > 'Native'
+    
+    The VOI and predicted segmentations in DICOM will be saved in 'Output' > ddbb > 'DICOM'
