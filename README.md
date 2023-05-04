@@ -26,9 +26,11 @@ Data must be structured in the following way:
     
     Organization of input data: The ddbb folder should contain a different folder for each case to process. In each case folder, the image scan should be saved in a sub-folder named "img", and the manual OAR segmentations - if available - in a sub-folder named "mOAR".
     
-    To load the mOARs in DICOM format, we have included a series of typical names used in the clinic to describe the rectum, bladder, prostate and seminal vesicles. These names can be found in utils.utilities.dicom_to_nifti(), and can be updated to include other terminologies by adding them to the available lists.
-    
     The loaded images will be saved in 'Output' > ddbb > 'imgs'
+    
+    If the manual OARs masks (for the bladder, rectum, prostate, and seminal vesicles) are available and saved in the sub-folder "mOAR", they will also be loaded. To load them in DICOM format, we have included a series of typical names used in the clinic to describe the rectum, bladder, prostate and seminal vesicles. These names can be found in utils.load_data.dicom_to_nifti(), and can be updated to include other terminologies by adding them to the available lists. Only the available masks of interest will be saved. 
+    
+    The loaded mOARs will be saved in 'Output' > ddbb > 'GTs'
 
 2. VOI EXTRACTION                                                                                                                                                 
 Localization Network + Crop using the centroid of the coarse prosate segmentation. Check the result to ensure that appropriate VOI has been created. Sometimes some images are not well predicted and it's necessary to modify this VOI manually to ensure that the OARs and urethra segmentations are accurate.
