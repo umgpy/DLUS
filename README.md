@@ -16,11 +16,10 @@ Install dependencies:
 **0. VARIABLE AND PATH DEFINITIONS**                                                                                                                                       
 Please, change the following options accordingly:                                                                                                                       
 
-    ddbb             = ...              -->    Database name. No spaces, no underscore _                                                                               
-    mode             = 'dicom'          -->    Image mode. Options: 'nifti', 'dicom'                                                                                   
-    model            = 'Mixed_model'    -->    Model for OAR segmentation. Options: 'FR_model' (French rectum), 'Mixed_model' (French + Italian databases)             
-    use_manual_OARs  = True            -->    Option to use manual OAR segmentations instead of automatic ones. Options : False, True                                   
-                    
+- ddbb             = ...              -->    Database name. No spaces, no underscore _                                                                               
+- mode             = 'dicom'          -->    Image mode. Options: 'nifti', 'dicom'                                                                                   
+- model            = 'Mixed_model'    -->    Model for OAR segmentation. Options: 'FR_model' (French rectum), 'Mixed_model' (French + Italian databases)             
+- use_manual_OARs  = True             -->    Option to use manual OAR segmentations instead of automatic ones. Options : False, True                                                       
 
 1. LOAD ORIGINAL IMAGES                                                                                                                                                 
 Data must be structured in the following way:                                                                                                                         
