@@ -8,7 +8,7 @@ from rt_utils import RTStructBuilder
 from .utilities import check_if_exist, resample_volume
 
                   
-def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str):
+def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str, use_manual_OARs=False):
     """
     Function to translate the predicted volume or OARs back to the native space.
     Parameters:
@@ -30,8 +30,9 @@ def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str):
         print('Obtaining output in the native space...')
         
         # Metadata of VOI cropping
-        df_meta   = pd.read_csv(os.path.join(out_path, 'VOIs', 'metadata.csv'))
-        df_meta_i = df_meta.loc[df_meta['idx'] == float(idx)]
+        if use_manual_OARs: df_meta   = pd.read_csv(os.path.join(out_path, 'mVOIs', 'metadata.csv'))
+        else: df_meta   = pd.read_csv(os.path.join(out_path, 'VOIs', 'metadata.csv'))
+        df_meta_i = df_meta.loc[df_meta['idx'] == float(''.join([str(s) for s in idx if s.isdigit()]))]
             
         # Original image characteristics (Native space)
         origin_ct = [df_meta_i['x0'].values[0], df_meta_i['y0'].values[0], df_meta_i['z0'].values[0]]
