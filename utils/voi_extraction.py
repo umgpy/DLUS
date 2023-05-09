@@ -17,22 +17,30 @@ def run_voi_extraction(checkpoint_path, out_path, dir_ddbb, use_manual_OARs=Fals
         if '.ipynb_checkpoints' not in path:
             idx = path.split('_')[1]
             print('\nProcessing case: ', idx)
-            if use_manual_OARs:
-                VOI_path = os.path.join(out_path, 'mVOIs', 'imagesTs', path)
-                VOI_path_labels = os.path.join(out_path, 'OARs', 'manual', path.split('_')[0]+'_'+path.split('_')[1]+'.nii.gz')
-                data_idx = voi_extraction_manual(idx, os.path.join(dir_ddbb, path), os.path.join(out_path, 'GTs'), VOI_path, VOI_path_labels)
-                metadata_file = os.path.join(out_path, 'mVOIs', 'metadata.csv')
-            else:
-                VOI_path = os.path.join(out_path, 'VOIs', 'imagesTs', path)
-                data_idx = voi_extraction(idx, os.path.join(dir_ddbb, path), VOI_path, checkpoint_path)
-                metadata_file = os.path.join(out_path, 'VOIs', 'metadata.csv')
-            metadata.append(data_idx)
+            try:
+                urethra_path = os.path.join(out_path, 'Urethra', 'GT_VOI', path.split('_')[0]+'_'+path.split('_')[1]+'.nii.gz')
+                prostate_path = os.path.join(out_path, 'GTs', idx, 'mask_Prostate.nii.gz')
+                if use_manual_OARs:
+                    VOI_path = os.path.join(out_path, 'mVOIs', 'imagesTs', path)
+                    VOI_path_labels = os.path.join(out_path, 'OARs', 'manual', path.split('_')[0]+'_'+path.split('_')[1]+'.nii.gz')
+                    if os.path.exists(prostate_path):
+                        data_idx = voi_extraction_manual(idx, os.path.join(dir_ddbb, path), prostate_path, VOI_path, VOI_path_labels, urethra_path)
+                    else:
+                        data_idx = voi_extraction(idx, os.path.join(dir_ddbb, path), VOI_path, checkpoint_path, prostate_path, urethra_path)
+                    metadata_file = os.path.join(out_path, 'mVOIs', 'metadata.csv')
+                else:
+                    VOI_path = os.path.join(out_path, 'VOIs', 'imagesTs', path)
+                    data_idx = voi_extraction(idx, os.path.join(dir_ddbb, path), VOI_path, checkpoint_path, prostate_path, urethra_path)
+                    metadata_file = os.path.join(out_path, 'VOIs', 'metadata.csv')
+                metadata.append(data_idx)
+            except:
+                print('--------------------- ERROR PROCESSING THIS CASE ------------------------------')
     df_meta = pd.DataFrame(np.array(metadata).squeeze(axis=2), columns=['idx', 'x0','y0','z0', 'res_x0','res_y0','res_z0', 'dim_x0','dim_y0','dim_z0', 'xVOI_res','yVOI_res','zVOI_res', 'res_xVOI_res','res_yVOI_res','res_zVOI_res', 'dim_xVOI_res','dim_yVOI_res','dim_zVOI_res','xoff1', 'xoff2', 'yoff1', 'yoff2', 'zoff1', 'zoff2'])
     df_meta.to_csv(metadata_file)
     df_meta
     
     
-def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path):
+def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path, prostate_path, urethra_path):
     """
     Calls the Localization Network (LocalizationNet), a 3DUNet with input size 128x128x128, and loads the pretrained weights. This network creates a VOI of size 224x224x224 from the original image centered on the prostate.
     Parameters:
@@ -58,7 +66,7 @@ def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path):
     stats = [-3.417609237173173e-07, 1.9904431281376725e-07]
     img_resized = (img_resized - stats[0])/stats[1]
     print('Image resized ', img_resized.shape)
-
+ 
     # COARSE SEGMENTATION PREDICTION--------------------------------------------------------------------------------------------
     # LocalizationNet parameters
     model = unet3d((128,128,128,1))
@@ -105,10 +113,23 @@ def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path):
 
     print('Saving... '+ VOI_path)
     sitk.WriteImage(VOI_img, VOI_path, True)
+    
+    # In case the uretra is available:
+    try:
+        urethra_path_GT = os.path.join('/'.join(prostate_path.split('/')[:-1]), 'mask_Urethra.nii.gz')
+        urethra_gt = sitk.ReadImage(urethra_path_GT)
+        urethra_gt_res = resample_volume(urethra_gt, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
+        urethra_gt = np.where(sitk.GetArrayFromImage(urethra_gt_res)==255, 1, 0)
+        VOI_urethra, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(urethra_gt, img_x, img_y, img_z, x_cent, y_cent, z_cent)
+        VOI_urethra = sitk.GetImageFromArray(VOI_urethra)
+        VOI_urethra.CopyInformation(VOI_img)
+        sitk.WriteImage(VOI_urethra, urethra_path, True)
+    except: pass
 
     # Save meta-data
     data_idx = np.zeros((25,1))
-    data_idx[0] = str(idx)
+    try: data_idx[0] = idx
+    except: data_idx[0] = int(''.join([str(s) for s in idx if s.isdigit()]))
     data_idx[1:4], data_idx[4:7], data_idx[7:10] = np.array(origin)[:,np.newaxis], np.array(resolution)[:,np.newaxis], np.array(original_size)[:,np.newaxis]
     data_idx[10:13], data_idx[13:16], data_idx[16:19] = np.array(new_origin)[:,np.newaxis], np.array(VOI_img.GetSpacing())[:,np.newaxis], np.array(VOI_img.GetSize())[:,np.newaxis]
     data_idx[19:25] = np.array([xoff1, xoff2, yoff1, yoff2, zoff1, zoff2])[:,np.newaxis]
@@ -116,60 +137,98 @@ def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path):
     return data_idx                      
 
 
-def voi_extraction_manual(idx:str, img_path, label_path, VOI_path, VOI_path_labels):
- 
+def voi_extraction_manual(idx:str, img_path, prostate_path, VOI_path, VOI_path_labels, urethra_path):
+    """
+    Calls the Localization Network (LocalizationNet), a 3DUNet with input size 128x128x128, and loads the pretrained weights. This network creates a VOI of size 224x224x224 from the original image centered on the prostate.
+    Parameters:
+        idx : case id
+        img_path : directory containing all of the images (CT/MR) NIfTI files
+        prostate_path : path of the GT prostate to generate the VOI
+        VOI_path : path to save the VOI in NIfTI format
+        VOI_path_labels : path to save the GT OAR masks in the VOI in NIfTI format
+        urethra_path : path to save the GT VOI urethra mask in NIfTI format
+    Returns:
+        data_idx : metadata of VOI extraction
+    """
+    
     # Set the centroid of the prostate as the center of the VOI with fixed sizes of (img_x x img_y x img_z) voxels
     img_x, img_y, img_z = 224, 224, 224 ### DO NOT TOUCH. VOI size required for OAR Segmentation Network
     # Load labelmap NIfTI file
-    file_labelmap  = os.path.join(label_path, idx, 'labelMap.nii.gz') 
+    prostate_gt       = sitk.ReadImage(prostate_path)
+    img    = sitk.ReadImage(img_path)
+    origin, resolution = prostate_gt.GetOrigin(), prostate_gt.GetSpacing()
+    original_size = (prostate_gt.GetSize()[0], prostate_gt.GetSize()[1], prostate_gt.GetSize()[2])
+    # Resample the labelmap to a spatial resolution of (1x1x1) mm
+    prostate_gt_res = resample_volume(prostate_gt, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
+    img_resample    = resample_volume(img, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1])
+    origin_lmap_res, resolution_lmap_res, size_lmap_res = prostate_gt_res.GetOrigin(), prostate_gt_res.GetSpacing(), prostate_gt_res.GetSize()
+    prostate_gt_res_np = sitk.GetArrayFromImage(prostate_gt_res).transpose(1,2,0)
+
+    # Compute the centroid of the largest connected component of the prostate
+    regions, r_area   = regionprops(label(prostate_gt_res_np)), 0
+    for i, reg in enumerate(regions):
+        if reg.area>r_area:
+            r_area = reg.area
+            x_cent, y_cent, z_cent = reg.centroid
+    print('x:', x_cent, 'y:', y_cent, 'z:', z_cent)
     
-    if not os.path.exists(file_labelmap):
-        print('MISSING LABELMAP for patient: ' + idx)
-    else:
-        labelmap       = sitk.ReadImage(file_labelmap)
-        img    = sitk.ReadImage(img_path)
-        origin, resolution = labelmap.GetOrigin(), labelmap.GetSpacing()
-        original_size = (labelmap.GetSize()[0], labelmap.GetSize()[1], labelmap.GetSize()[2])
-        prostate_gt    = (labelmap==3)
-        # Resample the labelmap to a spatial resolution of (1x1x1) mm
-        prostate_gt_res = resample_volume(prostate_gt, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
-        labelmap_res    = resample_volume(labelmap, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
-        img_resample    = resample_volume(img, interpolator = sitk.sitkLinear, new_spacing = [1, 1, 1])
-        origin_lmap_res, resolution_lmap_res, size_lmap_res = prostate_gt_res.GetOrigin(), prostate_gt_res.GetSpacing(), prostate_gt_res.GetSize()
-        prostate_gt_res_np = sitk.GetArrayFromImage(prostate_gt_res).transpose(1,2,0)
+    # Resample other available OAR masks
+    bladder_path = os.path.join('/'.join(prostate_path.split('/')[:-1]), 'mask_Bladder.nii.gz')
+    rectum_path = os.path.join('/'.join(prostate_path.split('/')[:-1]), 'mask_Rectum.nii.gz')
+    semves_path = os.path.join('/'.join(prostate_path.split('/')[:-1]), 'mask_SeminalVesicles.nii.gz')
+    if os.path.exists(bladder_path):
+        bladder_gt = sitk.ReadImage(bladder_path)
+        bladder_gt_res = resample_volume(bladder_gt, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
+    if os.path.exists(rectum_path):
+        rectum_gt = sitk.ReadImage(rectum_path)
+        rectum_gt_res = resample_volume(rectum_gt, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
+    if os.path.exists(semves_path):
+        semvesicles_gt = sitk.ReadImage(semves_path)
+        semvesicles_gt_res = resample_volume(semvesicles_gt, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
 
-        # Compute the centroid of the largest connected component of the prostate
-        regions, r_area   = regionprops(label(prostate_gt_res_np)), 0
-        for i, reg in enumerate(regions):
-            if reg.area>r_area:
-                r_area = reg.area
-                x_cent, y_cent, z_cent = reg.centroid
-        print('x:', x_cent, 'y:', y_cent, 'z:', z_cent)
-                
-        # EXTRACT VOI----------------------------------------------------------------------------------------------------------------
-        VOI_img, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(sitk.GetArrayFromImage(img_resample), img_x, img_y, img_z, x_cent, y_cent, z_cent)
-        VOI_img = sitk.GetImageFromArray(VOI_img)
-        new_origin = (yoff1*(resolution_lmap_res[0])+origin_lmap_res[0], xoff1*(resolution_lmap_res[1])+origin_lmap_res[1], zoff1*(resolution_lmap_res[2])+origin_lmap_res[2])
-        VOI_img.SetOrigin((0,0,0))
-        VOI_img.SetSpacing(img_resample.GetSpacing())
-        VOI_img.SetDirection(img_resample.GetDirection())
+    # EXTRACT VOI----------------------------------------------------------------------------------------------------------------
+    VOI_img, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(sitk.GetArrayFromImage(img_resample), img_x, img_y, img_z, x_cent, y_cent, z_cent)
+    VOI_img = sitk.GetImageFromArray(VOI_img)
+    new_origin = (yoff1*(resolution_lmap_res[0])+origin_lmap_res[0], xoff1*(resolution_lmap_res[1])+origin_lmap_res[1], zoff1*(resolution_lmap_res[2])+origin_lmap_res[2])
+    VOI_img.SetOrigin((0,0,0))
+    VOI_img.SetSpacing(img_resample.GetSpacing())
+    VOI_img.SetDirection(img_resample.GetDirection())
 
-        print('Saving... '+ VOI_path)
-        sitk.WriteImage(VOI_img, VOI_path, True)  
+    print('Saving... '+ VOI_path)
+    sitk.WriteImage(VOI_img, VOI_path, True)  
 
-        VOI_labelmap, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(sitk.GetArrayFromImage(labelmap_res), img_x, img_y, img_z, x_cent, y_cent, z_cent)
-        VOI_labelmap = sitk.GetImageFromArray(VOI_labelmap)
-        VOI_labelmap.CopyInformation(VOI_img)
-        sitk.WriteImage(VOI_labelmap, VOI_path_labels, True)
-            
-        # Save meta-data
-        data_idx = np.zeros((25,1))
-        data_idx[0] = str(idx)
-        data_idx[1:4], data_idx[4:7], data_idx[7:10] = np.array(origin)[:,np.newaxis], np.array(resolution)[:,np.newaxis], np.array(original_size)[:,np.newaxis]
-        data_idx[10:13], data_idx[13:16], data_idx[16:19] = np.array(new_origin)[:,np.newaxis], np.array(VOI_img.GetSpacing())[:,np.newaxis], np.array(VOI_img.GetSize())[:,np.newaxis]
-        data_idx[19:25] = np.array([xoff1, xoff2, yoff1, yoff2, zoff1, zoff2])[:,np.newaxis]
+    # EXTRACT VOI FOR AVAILABLE OAR AND JOIN INTO LABELMAP
+    labelmap_gt = np.where(sitk.GetArrayFromImage(prostate_gt_res)==255, 3, 0)
+    if os.path.exists(rectum_path): labelmap_gt = np.where(sitk.GetArrayFromImage(rectum_gt_res)==255, 1, labelmap_gt)
+    if os.path.exists(bladder_path): labelmap_gt = np.where(sitk.GetArrayFromImage(bladder_gt_res)==255, 2, labelmap_gt)
+    if os.path.exists(semves_path): labelmap_gt = np.where(sitk.GetArrayFromImage(semvesicles_gt_res)==255, 4, labelmap_gt)
+        
+    VOI_labelmap, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(labelmap_gt, img_x, img_y, img_z, x_cent, y_cent, z_cent)
+    VOI_labelmap = sitk.GetImageFromArray(VOI_labelmap)
+    VOI_labelmap.CopyInformation(VOI_img)
+    sitk.WriteImage(VOI_labelmap, VOI_path_labels, True)
+    
+    # In case the uretra is available:
+    try:
+        urethra_path_GT = os.path.join('/'.join(prostate_path.split('/')[:-1]), 'mask_Urethra.nii.gz')
+        urethra_gt = sitk.ReadImage(urethra_path_GT)
+        urethra_gt_res = resample_volume(urethra_gt, interpolator = sitk.sitkNearestNeighbor, new_spacing = [1, 1, 1])
+        urethra_gt = np.where(sitk.GetArrayFromImage(urethra_gt_res)==255, 1, 0)
+        VOI_urethra, xoff1, xoff2, yoff1, yoff2, zoff1, zoff2 = createdatatensor(urethra_gt, img_x, img_y, img_z, x_cent, y_cent, z_cent)
+        VOI_urethra = sitk.GetImageFromArray(VOI_urethra)
+        VOI_urethra.CopyInformation(VOI_img)
+        sitk.WriteImage(VOI_urethra, urethra_path, True)
+    except: pass
+    
+    # Save meta-data
+    data_idx = np.zeros((25,1))
+    try: data_idx[0] = idx
+    except: data_idx[0] = int(''.join([str(s) for s in idx if s.isdigit()]))
+    data_idx[1:4], data_idx[4:7], data_idx[7:10] = np.array(origin)[:,np.newaxis], np.array(resolution)[:,np.newaxis], np.array(original_size)[:,np.newaxis]
+    data_idx[10:13], data_idx[13:16], data_idx[16:19] = np.array(new_origin)[:,np.newaxis], np.array(VOI_img.GetSpacing())[:,np.newaxis], np.array(VOI_img.GetSize())[:,np.newaxis]
+    data_idx[19:25] = np.array([xoff1, xoff2, yoff1, yoff2, zoff1, zoff2])[:,np.newaxis]
 
-        return data_idx 
+    return data_idx 
     
     
 def createdatatensor(img, img_x, img_y, img_z, x_cent, y_cent, z_cent):
