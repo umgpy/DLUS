@@ -9,13 +9,24 @@ Any questions, please send an email to Dr. Javier Pascau  - jpascau@ing.uc3m.es
 
 ![Figure1](https://user-images.githubusercontent.com/83298381/226644663-d59dfd54-1c1d-40e8-9a87-089862e4a396.png)
 
+### INSTALLATION
+
 Install dependencies:
 
 - Python >= 3.7
 - Pytorch
 - You should not have any nnU-Net installation in your python environment since DLUS will install its own custom installation.
 
-**0. VARIABLE AND PATH DEFINITIONS**    
+How to install ?
+
+```bash
+git clone https://github.com/BSEL-UC3M/DLUS.git
+cd DLUS
+pip install -e .
+```
+
+
+## 0. VARIABLE AND PATH DEFINITIONS
 
 Please, change the following options accordingly:                                                                                                                       
 
@@ -25,7 +36,7 @@ Please, change the following options accordingly:
 - use_manual_OARs  = True             -->    Option to use manual OAR segmentations instead of automatic ones. Options : False, True                                                       
 
 
-**1. LOAD ORIGINAL IMAGES**   
+## 1. LOAD ORIGINAL IMAGES   
 
 Data must be structured in the following way:                                                                                                                         
   Two directories are needed for each database ddbb:                                                                                                                   
@@ -33,6 +44,8 @@ Data must be structured in the following way:
   - output data    [out_path] : 'Output' > ddbb                                                                                                                       
     
 Organization of input data: The ddbb folder should contain a different folder for each case to process. In each case folder, the image scan should be saved in a sub-folder named "img", and the manual OAR segmentations - if available - in a sub-folder named "mOAR".
+
+**You must create the folder "Input" and add there your database folder.** The rest will be done automatically.
     
 As an example:
     
@@ -45,7 +58,7 @@ The loaded images will be saved in 'Output' > ddbb > 'imgs'
     
 - The loaded mOARs will be saved in 'Output' > ddbb > 'GTs'
 
-**2. VOI EXTRACTION**
+## 2. VOI EXTRACTION
 
 Localization Network + Crop using the centroid of the coarse prosate segmentation. 
 
@@ -55,7 +68,7 @@ The cropped VOIs will be saved in 'Output' > ddbb > 'VOIs' > 'imagesTs'
     
 - If use_manual_OARs = True --> The manual segmentation of the prostate (if available) will be used directly to create the VOI. For the cases where this mask is not available, the VOI will be created automatically with the previously described method. All the cropped VOIs will be saved in 'Output' > ddbb > 'mVOIs' > 'imagesTs', and the available manual contours in 'Output' > ddbb > 'OARs' > 'manual'
 
-**3. OARs SEGMENTATION : Fine Segmentation Network**
+## 3. OARs SEGMENTATION : Fine Segmentation Network
 
 A trained nnU-Net is called to predict the segmentations of the bladder, rectum, prostate and seminal vesicles. Depending of the model selected (FR_model or Mixed_model), the network called for inference differs. The main distinction between both networks is the protocol to segment the rectum, based on French delineations with FR_model, or trained with joined data from a French and two Italian medical institutions with Mixed_model.
 
@@ -67,7 +80,7 @@ The VOI and predicted segmentations in the native space will be saved in 'Output
     
 The VOI and predicted segmentations in DICOM will be saved in 'Output' > ddbb > 'DICOM'
 
-**4. DISTANCE MAP COMPUTATION**
+## 4. DISTANCE MAP COMPUTATION
 
 The bladder and prostate OARs segmentations are used to calculate the distance maps, which are then used to guide the urethra segmentation.
 
@@ -77,7 +90,7 @@ When the manual OARs masks are used (when available), the computed distance maps
     
 - We recommend obtaining both the distance maps and running steps 4 and 5 with the manual and automatic contours (use_manual_OARs = True, use_manual_OARs = False) as the automatic ones are smoother in general.
     
-**5. URETHRA SEGMENTATION**
+## 5. URETHRA SEGMENTATION
 
 A trained nnU-Net is called to predict the segmentation of the urethra based on the previously computed distance maps. 
 
