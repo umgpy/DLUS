@@ -9,9 +9,9 @@ Cubero, L., García-Elcano, L, Mylona, E., Boue-Rafle, A., Cozzarini, C., Ubeira
 
 Install dependencies:
 
-Python >= 3.7
-Pytorch
-You should not have any nnU-Net installation in your python environment since DLUS will install its own custom installation.
+- Python >= 3.7
+- Pytorch
+- You should not have any nnU-Net installation in your python environment since DLUS will install its own custom installation.
 
 0. VARIABLE AND PATH DEFINITIONS                                                                                                                                       
 Please, change the following options accordingly:                                                                                                                       
