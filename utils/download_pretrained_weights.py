@@ -20,7 +20,7 @@ def download_pretrained_weights(task_id):
         WEIGHTS_URL = "https://zenodo.org/record/7826416/files/Task113_IGRTProstateVOI_Add.zip?download=1"
 
     if WEIGHTS_URL is not None and not weights_path.exists():
-        print(f"First-time user: Downloading pretrained weights for Task {task_id} (~2.3GB) ... It might take a while (~ 11 mins):-)")
+        print(f"First-time user: Downloading pretrained weights for Task {task_id} (~2.3GB) ... It might take a while :-)")
 
         download_url_and_unpack(WEIGHTS_URL, config_dir)
         
