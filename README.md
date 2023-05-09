@@ -103,3 +103,5 @@ Then, a post-processing step allows to bring the OAR segmentations back to nativ
 The VOI and predicted segmentations in the native space will be saved in 'Output' > ddbb > 'Native'
     
 The VOI and predicted segmentations in DICOM will be saved in 'Output' > ddbb > 'DICOM'
+
+**Important:** We have noticed that some of the urethra contours extend out of the prostate contour. In those cases, they should be cropped to the borders of the prsotate. 
