@@ -16,15 +16,20 @@ def dm_computation(dir_ddbb, out_path, model, use_manual_OARs=False):
             print('\nProcessing case: ', idx)
             if use_manual_OARs:
                 dmap_path = os.path.join(out_path, 'mDistanceMaps', 'imagesTs', path)
+                file_OARs = os.path.join(out_path, 'OARs', 'manual', path.split('_')[0]+'_'+idx+'.nii.gz')
             else:
                 dmap_path = os.path.join(out_path, 'DistanceMaps', 'imagesTs', path)
-            
-            if os.path.exists(dmap_path):
-                continue
-                
-            file_OARs = os.path.join(out_path, 'OARs', model, path.split('_')[0]+'_'+idx+'.nii.gz')
-            out_OARs  = sitk.ReadImage(file_OARs)
-            obtain_dm_img(out_OARs, dmap_path)
+                file_OARs = os.path.join(out_path, 'OARs', model, path.split('_')[0]+'_'+idx+'.nii.gz')
+            try:
+                try:
+                    out_OARs  = sitk.ReadImage(file_OARs)
+                    obtain_dm_img(out_OARs, dmap_path)
+                except:
+                    # Using calculated OARs
+                    file_OARs = os.path.join(out_path, 'OARs', model, path.split('_')[0]+'_'+idx+'.nii.gz')
+                    out_OARs  = sitk.ReadImage(file_OARs)
+                    obtain_dm_img(out_OARs, dmap_path)
+            except: print('------------------------------- Error processing this case ------------------------------------')
 
 def obtain_dm_img(out_OARs, file_dm_final):
     
