@@ -13,7 +13,7 @@ Install dependencies:
 - Pytorch
 - You should not have any nnU-Net installation in your python environment since DLUS will install its own custom installation.
 
-0. VARIABLE AND PATH DEFINITIONS                                                                                                                                       
+**0. VARIABLE AND PATH DEFINITIONS**                                                                                                                                       
 Please, change the following options accordingly:                                                                                                                       
 
     ddbb             = ...              -->    Database name. No spaces, no underscore _                                                                               
