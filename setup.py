@@ -5,7 +5,7 @@ setup(name='DLUS',
       description='DLUS: Deep Learning-based Segmentation of Prostatic Urethra on Computed Tomography Scans for Treatment Planning',
       url='https://github.com/BSEL-UC3M/DLUS',
       author='IGT - BSEL-UC3M',
-      author_email='jpascau@uc3m.es',
+      author_email='jpascau@ing.uc3m.es',
       install_requires=[
             "dcmrtstruct2nii",
           "dicom2nifti",
