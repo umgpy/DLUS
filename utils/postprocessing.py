@@ -5,128 +5,320 @@ import pandas as pd
 import numpy as np
 from rt_utils import RTStructBuilder
 
-from .utilities import check_if_exist, resample_volume
+from highdicom.seg.content import  SegmentDescription
+from highdicom.sr.coding import Code
+from highdicom.seg.sop import Segmentation
+from highdicom.seg import SegmentAlgorithmTypeValues
+from highdicom import AlgorithmIdentificationSequence
+import pydicom
+from pydicom.uid import generate_uid
+import glob, shutil
 
-                  
-def postprocessing_native(pred_file, out_path, idx, vol:str, ddbb:str, use_manual_OARs=False):
+
+
+from .utilities import check_if_exist, resample_volume
+from glob import glob
+
+
+
+
+def postprocessing_native(pred_file, out_path, idx, vol: str, ddbb: str, use_manual_OARs=False):
     """
     Function to translate the predicted volume or OARs back to the native space.
     Parameters:
         pred_file : loaded volume with SimpleITK, it should be the VOI or OARs segmentation
         out_path : directory to save results
-        idx : case id (0001)
-        vol : type of volume to translate --> 'OARs', 'VOI'
-        ddbb : name of the database
+        idx : case id (e.g. '0001')
+        vol : type of volume to translate --> 'OARs' or 'VOI'
+        ddbb : name of the database (e.g. 'testData')
+        use_manual_OARs: whether to use manual OARs
     """
+    import os
+    import pandas as pd
+    import numpy as np
+    import SimpleITK as sitk
+    from utils.utilities import check_if_exist
+
     print('\n')
-    # Check if volume already translated into native space
+    # prepare output directory & filename
     out_path_native = os.path.join(out_path, 'Native', idx)
-    check_if_exist(out_path_native)
-    file_vol_name = os.path.join(out_path_native, ddbb+'_'+idx+'_'+vol+'.nii.gz')
+    check_if_exist(out_path_native, create=True)
+    file_vol_name = os.path.join(out_path_native, f'{ddbb}_{idx}_{vol}.nii.gz')
+
     if os.path.exists(file_vol_name):
-        print('Output in the native space for case ' + idx + ' already exists')
-        
-    else:
-        print('Obtaining output in the native space...')
-        
-        # Metadata of VOI cropping
-        if use_manual_OARs: df_meta   = pd.read_csv(os.path.join(out_path, 'mVOIs', 'metadata.csv'))
-        else: df_meta   = pd.read_csv(os.path.join(out_path, 'VOIs', 'metadata.csv'))
-        df_meta_i = df_meta.loc[df_meta['idx'] == float(''.join([str(s) for s in idx if s.isdigit()]))]
-            
-        # Original image characteristics (Native space)
-        origin_ct = [df_meta_i['x0'].values[0], df_meta_i['y0'].values[0], df_meta_i['z0'].values[0]]
-        res_ct    = [df_meta_i['res_x0'].values[0],df_meta_i['res_y0'].values[0], df_meta_i['res_z0'].values[0]]
-        dim_ct    = [df_meta_i['dim_x0'].values[0], df_meta_i['dim_y0'].values[0], df_meta_i['dim_z0'].values[0]]
-        # Resized image characteristics (Common space)
-        origin_voi = [df_meta_i['xVOI_res'].values[0], df_meta_i['yVOI_res'].values[0], df_meta_i['zVOI_res'].values[0]]
-        res_voi    = [df_meta_i['res_xVOI_res'].values[0], df_meta_i['res_yVOI_res'].values[0], df_meta_i['res_zVOI_res'].values[0]]
-        dim_voi    = [df_meta_i['dim_xVOI_res'].values[0], df_meta_i['dim_yVOI_res'].values[0], df_meta_i['dim_zVOI_res'].values[0]]
-        xoff1, xoff2 = np.array(df_meta_i['xoff1']), np.array(df_meta_i['xoff2'])
-        yoff1, yoff2 = np.array(df_meta_i['yoff1']), np.array(df_meta_i['yoff2'])
-        zoff1, zoff2 = np.array(df_meta_i['zoff1']), np.array(df_meta_i['zoff2'])
+        print(f'Output in the native space for case {idx} already exists')
+        return
 
-        print('Processing case:', idx)
-        #----------------------------------------------------------------------------------------------------------------------#
-        # Image Scan Original
-        #----------------------------------------------------------------------------------------------------------------------#
-        file = os.path.join(out_path, 'imgs', ddbb+'_'+idx+'_0000.nii.gz')
-        or_img  = sitk.ReadImage(file)
+    print('Obtaining output in the native space...')
 
-        #----------------------------------------------------------------------------------------------------------------------#
-        # Predicted volume (OARs or VOI)
-        #----------------------------------------------------------------------------------------------------------------------#
-        # Resampling
-        print('Native: res',res_ct,'origin',origin_ct)
-        print('VOI: res',res_voi,'origin',origin_voi)
-        res_pred_img = resample_volume(pred_file, interpolator=sitk.sitkNearestNeighbor, new_spacing=res_ct)
-        print('Origin CT',or_img.GetOrigin(),'Origin volume',pred_file.GetOrigin(),'Origin volume resample',res_pred_img.GetOrigin())
-        print('Spacing CT', or_img.GetSpacing(),'Spacing volume',pred_file.GetSpacing(),'Spacing volume resample',res_pred_img.GetSpacing())
-        print('Size CT',or_img.GetSize(),'Size volume',pred_file.GetSize(),'Size volume resample',res_pred_img.GetSize())
-        origin_pred, res_pred = res_pred_img.GetOrigin(), res_pred_img.GetSpacing()
+    # --- Load metadata for VOI cropping ---
+    meta_dir = 'mVOIs' if use_manual_OARs else 'VOIs'
+    df_meta = pd.read_csv(os.path.join(out_path, meta_dir, 'metadata.csv'))
+    df_meta_i = df_meta.loc[df_meta['idx'] == float(''.join([s for s in idx if s.isdigit()]))]
 
-        res_pred_img.SetOrigin(origin_voi)
-        res_pred_img.SetSpacing(or_img.GetSpacing())
-        res_pred_img.SetDirection(or_img.GetDirection())
+    origin_voi = [df_meta_i[f'{c}VOI_res'].values[0] for c in ('x', 'y', 'z')]
+    res_voi    = [df_meta_i[f'res_{c}VOI_res'].values[0] for c in ('x', 'y', 'z')]
 
-        print('Saving... '+ file_vol_name)
-        sitk.WriteImage(res_pred_img, file_vol_name, True)
+    # --- Load original CT for reference ---
+    ct_file = os.path.join(out_path, 'imgs', f'{ddbb}_{idx}_0000.nii.gz')
+    or_img  = sitk.ReadImage(ct_file)
 
-        
-def export2dicomRT(file_img, file_seg, out_path, seg):
+    print('Processing case:', idx)
+    print('CT spacing/origin:', or_img.GetSpacing(), or_img.GetOrigin())
+    print('VOI spacing/origin:', res_voi, origin_voi)
+
+    # --- Bake VOI‐seg’s physical metadata into pred_file ---
+    pred_file.SetOrigin(origin_voi)
+    pred_file.SetSpacing(res_voi)
+    pred_file.SetDirection(or_img.GetDirection())
+
+    # --- One‐shot resample into exactly the CT grid ---
+    res_pred_img = sitk.Resample(
+        pred_file,
+        or_img.GetSize(),            # target size = CT size [X, Y, Z]
+        sitk.Transform(),            # identity
+        sitk.sitkNearestNeighbor,    # preserve labels
+        or_img.GetOrigin(),          # CT origin
+        or_img.GetSpacing(),         # CT spacing
+        or_img.GetDirection(),       # CT direction
+        0,                            # fill value outside VOI
+        pred_file.GetPixelID()       # same pixel type
+    )
+
+    print('Resampled segmentation:')
+    print('  spacing:', res_pred_img.GetSpacing())
+    print('  origin :', res_pred_img.GetOrigin())
+    print('  size   :', res_pred_img.GetSize())
+
+    # --- Save NIfTI in native space ---
+    print('Saving...', file_vol_name)
+    sitk.WriteImage(res_pred_img, file_vol_name, True)
+
+
+
+
+def export2dicomRT(ct_dicom_folder: str, file_seg: str, out_path: str, seg: str):
     """
-    Function to convert the image scan (CT/MR) and its segmentations (OARs/urethra) to DICOM format.
-    Parameters:
-        file_img : path to image (CT/MR)
-        file_seg : file to segmentation (OARs/urethra)
-        out_path : path to save the final DICOM files
-        seg : name to save the final DICOM segmentations, should contain either 'OARs' or 'urethra' ['OARs_DLUS', 'urethra_DLUS']
-    """
-    #----------------------------------------------------------------------------------------------------------------------#
-    # Image Scan
-    #----------------------------------------------------------------------------------------------------------------------#    
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
-        ct_to_dicom(file_img, out_path)
+    Convert a NIfTI segmentation into a DICOM RTSTRUCT, perfectly aligned to the
+    original CT series.
 
-    #----------------------------------------------------------------------------------------------------------------------#
-    # Segmentation - either OARs or urethra segmentation
-    #----------------------------------------------------------------------------------------------------------------------#
-    seg_image = sitk.ReadImage(file_seg)
-    print(seg_image.GetSize())
-    print('Loading Segmentation from >> '+ file_seg)    
-    
+    Parameters
+    ----------
+    ct_dicom_folder : str
+        Path to the ORIGINAL CT DICOM folder (one folder containing all .dcm CT slices).
+    file_seg : str
+        Path to the segmentation NIfTI (already resampled to CT voxel grid, but may
+        have wrong metadata).
+    out_path : str
+        Directory where the RTSTRUCT (and a copy of the CTs) will be written.
+    seg : str
+        Identifier for the segmentation ('OARs_DLUS' or 'urethra_DLUS').
+    """
+    # 1) make sure output dir exists
+    os.makedirs(out_path, exist_ok=True)
+
+     #Copy original CT DICOMs into out_path
+    if os.path.isdir(ct_dicom_folder):  # Assuming DICOM folder
+        for f in glob(os.path.join(ct_dicom_folder, '*.dcm')):
+            shutil.copy(f, out_path)
+
+    # 3) read the CT volume (to grab its spacing/origin/direction)
+    reader = sitk.ImageSeriesReader()
+    series_ids = reader.GetGDCMSeriesIDs(ct_dicom_folder)
+    if not series_ids:
+        raise RuntimeError(f"No DICOM series found in {ct_dicom_folder}")
+    file_names = reader.GetGDCMSeriesFileNames(ct_dicom_folder, series_ids[0])
+    reader.SetFileNames(file_names)
+    ct_img = reader.Execute()
+
+    # 4) read the NIfTI seg and *overwrite* its geometry so it matches the CT exactly
+    seg_img = sitk.ReadImage(file_seg)
+    seg_img.CopyInformation(ct_img)
+
+    # 5) extract the numpy mask
+    mask_np = sitk.GetArrayFromImage(seg_img)  # shape (z,y,x)
+
+    # 6) build RTSTRUCT using the ORIGINAL DICOM folder
+    rtstruct = RTStructBuilder.create_new(dicom_series_path=ct_dicom_folder)
+
     if 'OAR' in seg:
-        labelMap_np = sitk.GetArrayFromImage(seg_image)
-        rectum   = (labelMap_np==1).transpose((1, 2, 0))
-        bladder  = (labelMap_np==2).transpose((1, 2, 0))
-        prostate = (labelMap_np==3).transpose((1, 2, 0))
-        vseminls = (labelMap_np==4).transpose((1, 2, 0))
+        organs = [
+            (1, "Rectum",          [128,174,128]),
+            (2, "Bladder",         [241,214,145]),
+            (3, "Prostate",        [183,156,220]),
+            (4, "SeminalVesicles", [111,184,210]),
+        ]
+        for label, name, color in organs:
+            roi = (mask_np == label).transpose(1,2,0)
+            if roi.any():
+                rtstruct.add_roi(mask=roi, name=name, color=color)
+        # --- NEW: tag this RTSTRUCT with y DLUS tool name ---
+        rtstruct.set_series_description(f"DLUS_OAR")  
 
-        # NIfTI to DICOM
-        # Create new RT Struct. Requires the DICOM series path for the RT Struct.
-        rtstruct = RTStructBuilder.create_new(dicom_series_path=out_path)
-        # Add the 3D mask (Numpy array of type bool) as an ROI.
-        # Setting the color, description, and name
-        rtstruct.add_roi(mask=rectum,   color=[128, 174, 128], name="Rectum")
-        rtstruct.add_roi(mask=bladder,  color=[241, 214, 145], name="Bladder")
-        rtstruct.add_roi(mask=prostate, color=[183, 156, 220], name="Prostate")
-        rtstruct.add_roi(mask=vseminls, color=[111, 184, 210], name="SeminalVesicles")
-        rtstruct.save(os.path.join(out_path, seg+'_rt-structs'))
-        
-    if seg=='urethra':
-        labelMap_np = sitk.GetArrayFromImage(seg_image)
-        urethra     = (labelMap_np==1).transpose((1, 2, 0))
+    else:  # urethra
+        roi = (mask_np == 1).transpose(1,2,0)
+        if roi.any():
+            rtstruct.add_roi(mask=roi, name="Urethra", color=[255,0,0])
+        rtstruct.set_series_description(f"DLUS_Urethra")  
 
-        # NIfTI to DICOM
-        # Create new RT Struct. Requires the DICOM series path for the RT Struct.
-        rtstruct = RTStructBuilder.create_new(dicom_series_path=out_path)
-        # Add the 3D mask (Numpy array of type bool) as an ROI.
-        # Setting the color, description, and name
-        rtstruct.add_roi(mask=urethra,   color=[255, 0, 0], name="Urethra")
-        rtstruct.save(os.path.join(out_path, seg+'_rt-structs')) 
+    # 7) save it
+    rtstruct.save(os.path.join(out_path, seg + "_rt-structs.dcm"))
+
+
+
+
+def export_rt_and_dcmseg(
+    ct_dicom_folder: str,
+    seg_nifti: str,
+    out_path: str,
+    seg_name: str
+):
+    """
+    Export both an RTSTRUCT and a DICOM SEG from a NIfTI mask.
+
+    Parameters
+    ----------
+    ct_dicom_folder : str
+        Path to a folder of CT .dcm files (will be copied into out_path for RTSTRUCT).
+    seg_nifti : str
+        Path to the labeled NIfTI (integer labels).
+    out_path : str
+        Directory in which to save RTSTRUCT and DCMSEG.
+    seg_name : str
+        Basename for saved files, e.g. 'OARs_DLUS' or 'urethra_DLUS'.
+    """
+    os.makedirs(out_path, exist_ok=True)
+
+    # 1) Copy CT slices into a subfolder that RTStructBuilder will read
+    ct_dest = os.path.join(out_path, "CT_FOR_RT")
+    shutil.rmtree(ct_dest, ignore_errors=True)
+    shutil.copytree(ct_dicom_folder, ct_dest)
+
+    # 2) Load your NIfTI mask
+    seg_img = sitk.ReadImage(seg_nifti)
+    mask_np = sitk.GetArrayFromImage(seg_img)  # shape (Z,Y,X)
+
+    # 3) Build the RTSTRUCT
+    rtstruct = RTStructBuilder.create_new(dicom_series_path=ct_dest)
+    if "OAR" in seg_name:
+        rtstruct.set_series_description(f"DLUS_AI_Tool_Prediction_OARs")
+    else:
+        rtstruct.set_series_description(f"DLUS_AI_Tool_Prediction_Urethra")
+
+    # Decide which labels to export
+    if "OAR" in seg_name:
+        # multi-label OARs: (label, name, color)
+        definitions = [
+            (1, "Rectum",          [128,174,128]),
+            (2, "Bladder",         [241,214,145]),
+            (3, "Prostate",        [183,156,220]),
+            (4, "SeminalVesicles", [111,184,210]),
+        ]
+    else:
+        # single-label urethra
+        definitions = [
+            (1, "Urethra", [255,0,0])
+        ]
+
+    # add each ROI to RTSTRUCT
+    for label_val, label_name, color in definitions:
+        roi = (mask_np == label_val).transpose(1,2,0)  # SimpleITK (Z,Y,X) → rt_utils expects (X,Y,Z)
+        if roi.any():
+            rtstruct.add_roi(mask=roi, name=label_name, color=color)
+
+    rt_out = os.path.join(out_path, f"{seg_name}_rt-structs.dcm")
+    rtstruct.save(rt_out)
+    print("Wrote RTSTRUCT to", rt_out)
+
+    # 4) Build a DICOM SEG
+    # 4a) Gather CT frames in instance order
+    ct_files = sorted([
+        os.path.join(ct_dest,f)
+        for f in os.listdir(ct_dest)
+        if f.lower().endswith('.dcm')
+    ])
+    ct_ds = [pydicom.dcmread(p) for p in ct_files]
+    ct0 = ct_ds[0]
+
+    # 4b) Prepare segment descriptions
+    if "OAR" in seg_name:
+        seg_ids = [d[0] for d in definitions]
+    else:
+        seg_ids = [1]
+
+    segment_descriptions = []
+    for i in seg_ids:
+
+        label_name = next(n for (val,n,_) in definitions if val==i)
+
+        # build a proper AlgorithmIdentificationSequence
+        algo_id = AlgorithmIdentificationSequence(
+            name='DLUS AI Tool',
+            family=Code('121000','DCM','Segmentation'),
+            version='1.0.0',
+            source='YourOrganization',      # optional
+            parameters={'model':'Mixed_model'}
+        )
+
+        segment_descriptions.append(
+            SegmentDescription(
+                segment_number               = i,
+                segment_label                = label_name,
+                segmented_property_category = Code('T-D0050','SRT','Organ'),
+                segmented_property_type     = Code('T-D0050','SRT',label_name),
+                algorithm_type               = SegmentAlgorithmTypeValues.AUTOMATIC,
+                algorithm_identification     = algo_id
+            )
+    )
+    
+
+
+    # 4c) Rearrange mask to (numSegments, Z, Y, X)
+    #pixel_array = np.stack([(mask_np==i).astype('uint8') for i in seg_ids], axis=0)
+    # 4c) Rearrange mask to (Z, Y, X, numSegments)
+    pixel_array = np.stack([(mask_np == i).astype('uint8') for i in seg_ids], axis=-1)
+
+    #seg_ds = Segmentation(
+    #    source_images=ct_ds,
+    #    segmentation_type='BINARY',
+    #    pixel_array=pixel_array,
+    #    segment_descriptions=segment_descriptions,
+    #    series_instance_uid=generate_uid(),
+    #    sop_instance_uid=generate_uid(),
+    #   instance_number=1,
+    #    manufacturer='DLUS AI Tool',
+    #)
+
+    # build the DICOM-SEG
+    seg_ds = Segmentation(
+        source_images           = ct_ds,
+        segmentation_type       = 'BINARY',
+        pixel_array             = pixel_array,
+        segment_descriptions    = segment_descriptions,
+        # UIDs
+        series_instance_uid     = generate_uid(),
+        sop_instance_uid        = generate_uid(),
+        # Instance numbering
+        series_number           = ct0.SeriesNumber,             # use the same SeriesNumber as your CT
+        instance_number         = 1,                            # first/only instance
+        # Manufacturer/device metadata
+        manufacturer            = ct0.Manufacturer,             # e.g. “Siemens”
+        manufacturer_model_name = getattr(ct0, 'ManufacturerModelName', 'DLUS-AI-Model'),
+        device_serial_number    = getattr(ct0, 'DeviceSerialNumber', '0000'),
+        software_versions       = getattr(ct0, 'SoftwareVersions', ['1.0']),
+        omit_empty_frames=False,
+
+    )
+
+      
+
+    seg_out = os.path.join(out_path, f"{seg_name}_dcmseg.dcm")
+    seg_ds.save_as(seg_out)
+    print("Wrote DICOM-SEG to", seg_out)
+
+
         
-def ct_to_dicom(file_ct, out_path):  
+def ct_to_dicom(file_ct, out_path):  ## can be deleted as not being used in the new pipeline
     #----------------------------------------------------------------------------------------------------------------------#
     # CT Image
     #----------------------------------------------------------------------------------------------------------------------#
@@ -250,7 +442,7 @@ def postprocessing_reference_img(pred_seg, out_path, i, seg, file):
     print('Saving... '+ file_seg_name)
     sitk.WriteImage(res_pred_img, file_seg_name, True)
     
-def writeSlices(writer, series_tag_values, new_img, out_dir, i, thickness):
+def writeSlices(writer, series_tag_values, new_img, out_dir, i, thickness): # can be deleted as not being used in the new pipeline
     
     ##print(i)
     image_slice = new_img[:,:,i]

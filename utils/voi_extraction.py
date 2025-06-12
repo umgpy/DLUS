@@ -9,9 +9,10 @@ from skimage.transform import resize
 from networks.LocalizationNet.net_3DUnet import unet3d
 from networks.LocalizationNet.utils import get_weighted_sparse_categorical_crossentropy, dice_coefficient
 from .utilities import resample_volume
+import traceback
 
 
-def run_voi_extraction(checkpoint_path, out_path, dir_ddbb, use_manual_OARs=False):
+def old_run_voi_extraction(checkpoint_path, out_path, dir_ddbb, use_manual_OARs=False):
     metadata=[]
     for i, path in enumerate(os.listdir(dir_ddbb)):
         if '.ipynb_checkpoints' not in path:
@@ -33,12 +34,104 @@ def run_voi_extraction(checkpoint_path, out_path, dir_ddbb, use_manual_OARs=Fals
                     data_idx = voi_extraction(idx, os.path.join(dir_ddbb, path), VOI_path, checkpoint_path, prostate_path, urethra_path)
                     metadata_file = os.path.join(out_path, 'VOIs', 'metadata.csv')
                 metadata.append(data_idx)
-            except:
+            except Exception as e:
                 print('--------------------- ERROR PROCESSING THIS CASE ------------------------------')
+                print(str(e))
+
+    metadata_np = np.array(metadata)
+    if metadata_np.ndim == 3:
+        metadata_np = metadata_np.squeeze(axis=2)
+
     df_meta = pd.DataFrame(np.array(metadata).squeeze(axis=2), columns=['idx', 'x0','y0','z0', 'res_x0','res_y0','res_z0', 'dim_x0','dim_y0','dim_z0', 'xVOI_res','yVOI_res','zVOI_res', 'res_xVOI_res','res_yVOI_res','res_zVOI_res', 'dim_xVOI_res','dim_yVOI_res','dim_zVOI_res','xoff1', 'xoff2', 'yoff1', 'yoff2', 'zoff1', 'zoff2'])
     df_meta.to_csv(metadata_file)
     df_meta
     
+def run_voi_extraction(checkpoint_path, out_path, dir_ddbb, use_manual_OARs=False):
+    metadata = []
+    for path in os.listdir(dir_ddbb):
+        if '.ipynb_checkpoints' in path:
+            continue
+
+        idx = path.split('_')[1]
+        print(f'\nProcessing case: {idx}')
+        try:
+            # prepare your VOI paths exactly as before …
+            urethra_path = os.path.join(out_path, 'Urethra', 'GT_VOI',
+                                        f"{path.split('_')[0]}_{path.split('_')[1]}.nii.gz")
+            prostate_path = os.path.join(out_path, 'GTs', idx, 'mask_Prostate.nii.gz')
+
+            if use_manual_OARs:
+                VOI_path = os.path.join(out_path, 'mVOIs', 'imagesTs', path)
+                VOI_path_labels = os.path.join(out_path, 'OARs', 'manual',
+                                               f"{path.split('_')[0]}_{path.split('_')[1]}.nii.gz")
+                if os.path.exists(prostate_path):
+                    data_idx = voi_extraction_manual(idx,
+                                                     os.path.join(dir_ddbb, path),
+                                                     prostate_path,
+                                                     VOI_path,
+                                                     VOI_path_labels,
+                                                     urethra_path)
+                else:
+                    data_idx = voi_extraction(idx,
+                                              os.path.join(dir_ddbb, path),
+                                              VOI_path,
+                                              checkpoint_path,
+                                              prostate_path,
+                                              urethra_path)
+                metadata_file = os.path.join(out_path, 'mVOIs', 'metadata.csv')
+
+            else:
+                VOI_path = os.path.join(out_path, 'VOIs', 'imagesTs', path)
+                data_idx = voi_extraction(idx,
+                                          os.path.join(dir_ddbb, path),
+                                          VOI_path,
+                                          checkpoint_path,
+                                          prostate_path,
+                                          urethra_path)
+                metadata_file = os.path.join(out_path, 'VOIs', 'metadata.csv')
+
+            metadata.append(data_idx)
+
+        except Exception:
+            print('--------------------- ERROR PROCESSING THIS CASE ------------------------------')
+            traceback.print_exc()
+            continue
+
+    # Build a (n_cases × 25) 2D array
+    flat = []
+    for m in metadata:
+        arr = np.asarray(m)
+        if arr.ndim == 2 and arr.shape[1] == 1:
+            flat.append(arr.reshape(-1))
+        elif arr.ndim == 1 and arr.shape[0] == 25:
+            flat.append(arr)
+        else:
+            raise ValueError(f"Unexpected data_idx shape {arr.shape} for one case")
+
+    if not flat:
+        raise RuntimeError(f"No VOIs processed under {dir_ddbb}! Check your input paths.")
+
+    metadata_arr = np.vstack(flat)  # shape (n_cases, 25)
+
+    # Define column names
+    columns = [
+        'idx',
+        'x0','y0','z0',
+        'res_x0','res_y0','res_z0',
+        'dim_x0','dim_y0','dim_z0',
+        'xVOI_res','yVOI_res','zVOI_res',
+        'res_xVOI_res','res_yVOI_res','res_zVOI_res',
+        'dim_xVOI_res','dim_yVOI_res','dim_zVOI_res',
+        'xoff1','xoff2','yoff1','yoff2','zoff1','zoff2'
+    ]
+    if metadata_arr.shape[1] != len(columns):
+        raise RuntimeError(f"Metadata width mismatch: got {metadata_arr.shape[1]} cols, expected {len(columns)}")
+
+    # Create and save DataFrame
+    df_meta = pd.DataFrame(metadata_arr, columns=columns)
+    df_meta.to_csv(metadata_file, index=False)
+    return df_meta
+
     
 def voi_extraction(idx:str, img_path, VOI_path, checkpoint_path, prostate_path, urethra_path):
     """

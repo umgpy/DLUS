@@ -22,7 +22,7 @@ def load_data(data_path, out_path, mode:str, modality:str='CT'):
         print('ERROR IN DATA FORMAT. DATA NOT LOADED !')
         
         
-def get_image(patient_fold, data_path, out_path):
+def old_get_image(patient_fold, data_path, out_path):
     """
     Common function to get image paths. Used in functions dicom_to_nifti & nifti_data
     Outputs:
@@ -41,6 +41,35 @@ def get_image(patient_fold, data_path, out_path):
     
     return path_im, path_nii, file_nii, path_segs
 
+def get_image(patient_fold, data_path, out_path):
+    """
+    Cross-platform helper to build the input/output paths for a single patient.
+
+    Returns:
+        path_im   : the folder containing the DICOM series (data_path/patient_fold/img)
+        path_nii  : the directory under out_path where .nii.gz should go (out_path/imgs)
+        file_nii  : the full path to write the .nii.gz (path_nii/<db>_<patient>_0000.nii.gz)
+        path_segs : the folder containing RTSTRUCTs (data_path/patient_fold/mOAR)
+    """
+    # Use os.path.basename so it works on Windows backslashes or Unix slashes:
+    ddbb_id = os.path.basename(os.path.normpath(data_path))
+
+    # Where to write images
+    path_nii = os.path.join(out_path, 'imgs')
+    # e.g. <path_nii>/<ddbb_id>_<patient_fold>_0000.nii.gz
+    filename = f"{ddbb_id}_{patient_fold}_0000.nii.gz"
+    file_nii = os.path.join(path_nii, filename)
+
+    # Where to read images from
+    path_im = os.path.join(data_path, patient_fold, 'img')
+    if not os.path.isdir(path_im):
+        raise FileNotFoundError(f"Input image folder not found: {path_im}")
+
+    # Where RTSTRUCTs live, if any
+    path_segs = os.path.join(data_path, patient_fold, 'mOAR')
+
+    return path_im, path_nii, file_nii, path_segs
+
 
 def dicom_to_nifti(data_path, out_path):
     """
@@ -49,8 +78,9 @@ def dicom_to_nifti(data_path, out_path):
     for i, patient_fold in enumerate(os.listdir(data_path)):
         # Remove any individual file not located in a folder
         if os.path.isfile(patient_fold) or '.ipynb_checkpoints' in patient_fold:
-            continue
             print('Avoiding the file: ', patient_fold)
+            continue
+
         
         print('\nProcessing case: ', patient_fold)
         path_im, path_nii, file_nii, path_segs = get_image(patient_fold, data_path, out_path)        
@@ -68,8 +98,8 @@ def dicom_to_nifti(data_path, out_path):
 
         # Save as NIfTI
         print('Saving... '+ file_nii)
-        if not os.path.exists(path_nii):
-            os.makedirs(path_nii)
+        os.makedirs(path_nii, exist_ok=True)
+        print("Saving…", file_nii)
         sitk.WriteImage(image, file_nii, True)
         
         # Segmentation ###############################
