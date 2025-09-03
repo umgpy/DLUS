@@ -6,6 +6,9 @@ This is a fork of **DLUS** with fixes for cross-platform compatibility and a wor
 
 > This version ensures compatibility across Linux and Windows environments and resolves prior issues with binary execution on Windows.
 
+> #### [See details in EXE](EXE)
+ 
+
 
 Please refer to the main GitHub repository for DLUS: Deep Learning-based Segmentation of Prostatic Urethra on Computed Tomography Scans for Treatment Planning
 
